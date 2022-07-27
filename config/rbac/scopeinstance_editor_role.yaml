@@ -1,0 +1,24 @@
+# permissions for end users to edit scopeinstances.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: scopeinstance-editor-role
+rules:
+- apiGroups:
+  - operators.io.operator-framework
+  resources:
+  - scopeinstances
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - operators.io.operator-framework
+  resources:
+  - scopeinstances/status
+  verbs:
+  - get

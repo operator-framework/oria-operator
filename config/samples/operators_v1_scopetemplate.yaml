@@ -1,0 +1,17 @@
+apiVersion: operators.io.operator-framework/v1
+kind: ScopeTemplate
+metadata:
+  name: scopetemplate-sample
+spec:
+  clusterRoles:
+  - generateName: test
+    rules:
+    - apiGroups: [""]
+      # at the HTTP level, the name of the resource for accessing Secret
+      # objects is "secrets"
+      resources: ["secrets"]
+      verbs: ["get", "watch", "list"]
+    subjects:
+    - kind: Group
+      name: manager  # Name is case sensitive
+      apiGroup: rbac.authorization.k8s.io

@@ -1,0 +1,25 @@
+domain: io.operator-framework
+layout:
+- go.kubebuilder.io/v3
+projectName: scope-operator
+repo: awgreene/scope-operator
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: io.operator-framework
+  group: operators
+  kind: ScopeInstance
+  path: awgreene/scope-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: io.operator-framework
+  group: operators
+  kind: ScopeTemplate
+  path: awgreene/scope-operator/api/v1
+  version: v1
+version: "3"

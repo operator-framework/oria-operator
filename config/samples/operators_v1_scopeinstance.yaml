@@ -1,0 +1,8 @@
+apiVersion: operators.io.operator-framework/v1
+kind: ScopeInstance
+metadata:
+  name: scopeinstance-sample
+spec:
+  scopeTemplateName: scopetemplate-sample
+  namespaces:
+  - default

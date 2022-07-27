@@ -1,0 +1,20 @@
+# permissions for end users to view scopeinstances.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: scopeinstance-viewer-role
+rules:
+- apiGroups:
+  - operators.io.operator-framework
+  resources:
+  - scopeinstances
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - operators.io.operator-framework
+  resources:
+  - scopeinstances/status
+  verbs:
+  - get

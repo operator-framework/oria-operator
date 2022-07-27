@@ -1,0 +1,24 @@
+# permissions for end users to edit scopetemplates.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: scopetemplate-editor-role
+rules:
+- apiGroups:
+  - operators.io.operator-framework
+  resources:
+  - scopetemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - operators.io.operator-framework
+  resources:
+  - scopetemplates/status
+  verbs:
+  - get
