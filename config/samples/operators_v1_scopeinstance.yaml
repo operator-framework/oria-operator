@@ -5,4 +5,4 @@ metadata:
 spec:
   scopeTemplateName: scopetemplate-sample
   namespaces:
-  - default
+   - default
