@@ -18,18 +18,24 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"hash"
+	"hash/fnv"
 	"reflect"
-	"strings"
 
 	operatorsv1 "awgreene/scope-operator/api/v1"
 	"awgreene/scope-operator/util"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/rand"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -45,6 +51,19 @@ type ScopeInstanceReconciler struct {
 
 	logger *logrus.Logger
 }
+
+const (
+	// UID keys are used to track "owners" of bindings we create.
+	scopeInstanceUIDKey = "operators.coreos.io/scopeInstanceUID"
+	scopeTemplateUIDKey = "operators.coreos.io/scopeTemplateUID"
+
+	// Hash keys are used to track "abandoned" bindings we created.
+	scopeInstanceHashKey = "operators.coreos.io/scopeInstanceHash"
+	scopeTemplateHashKey = "operators.coreos.io/scopeTemplateHash"
+
+	// generateNames are used to track each binding we create for a single scopeTemplate
+	clusterRoleBindingGenerateKey = "operators.coreos.io/generateName"
+)
 
 //+kubebuilder:rbac:groups=operators.io.operator-framework,resources=scopeinstances,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=operators.io.operator-framework,resources=scopeinstances/status,verbs=get;update;patch
@@ -72,43 +91,62 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	st := &operatorsv1.ScopeTemplate{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: in.Spec.ScopeTemplateName}, st); err != nil {
 		if !k8sapierrors.IsNotFound(err) {
-
-			//Delete any RBAC owned by SI CR.
-			log.Log.Info("ScopeInstance .Spec.ScopeTemplateName references non-existent ScopeTemplate", "scopeTemplateName", st.GetName())
-			roleBindingMap, clusterRoleBindingMap, err := r.getListOfExistingRBAC(ctx, in)
-			if err != nil {
-				log.Log.Info("Error getting object", "error", err)
-				return ctrl.Result{}, err
-			}
-
-			if err := r.cleanupInvalidRBAC(ctx, clusterRoleBindingMap, roleBindingMap); err != nil {
-				log.Log.Info("Error in deleting Role Bindings", "error", err)
-				return ctrl.Result{}, err
-			}
+			return ctrl.Result{}, err
 		}
 
-		return ctrl.Result{}, err
+		// Delete anything owned by the scopeInstance if the scopeTemplate is gone.
+		listOption := client.MatchingLabels{
+			scopeInstanceUIDKey: string(in.GetUID()),
+		}
+
+		if err := r.deleteBindings(ctx, listOption); err != nil {
+			log.Log.Info("Error in deleting Role Bindings", "error", err)
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, nil
 	}
 
-	roleBindingMap, clusterRoleBindingMap, err := r.getListOfExistingRBAC(ctx, in)
-	if err != nil {
-		log.Log.Info("Error getting object", "error", err)
-		return ctrl.Result{}, err
-	}
-
-	// before create and delete loop for update and if it is updated then remove from map and
-	// no need to delete those rbac
-	if err := r.ensureRBAC(ctx, in, st); err != nil {
+	// create required roleBindings and clusterRoleBindings.
+	if err := r.ensureBindings(ctx, in, st); err != nil {
 		log.Log.Info("Error in creating Role Bindings", "error", err)
 		return ctrl.Result{}, err
 	}
 
-	if err := r.ensureUpdateOfRBAC(ctx, in, st, clusterRoleBindingMap, roleBindingMap); err != nil {
-		log.Log.Info("Error in Updating Role Bindings", "error", err)
+	listOption := client.MatchingLabels{
+		scopeInstanceUIDKey: string(in.GetUID()),
+	}
+
+	requirement, err := labels.NewRequirement(scopeInstanceHashKey, selection.NotEquals, []string{HashObject(in.Spec)})
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if err := r.cleanupInvalidRBAC(ctx, clusterRoleBindingMap, roleBindingMap); err != nil {
+	listOptions := &client.ListOptions{
+		LabelSelector: labels.NewSelector().Add(*requirement),
+	}
+
+	if err := r.deleteBindings(ctx, listOption, listOptions); err != nil {
+		log.Log.Info("Error in deleting Role Bindings", "error", err)
+		return ctrl.Result{}, err
+	}
+
+	// TODO: Find out how to merge with the above delete
+	listOption = client.MatchingLabels{
+		scopeInstanceUIDKey: string(in.GetUID()),
+		scopeTemplateUIDKey: string(st.GetUID()),
+	}
+
+	requirement, err = labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{HashObject(st.Spec)})
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	listOptions = &client.ListOptions{
+		LabelSelector: labels.NewSelector().Add(*requirement),
+	}
+
+	if err := r.deleteBindings(ctx, listOption, listOptions); err != nil {
 		log.Log.Info("Error in deleting Role Bindings", "error", err)
 		return ctrl.Result{}, err
 	}
@@ -118,53 +156,41 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{}, nil
 }
 
-func (r *ScopeInstanceReconciler) getListOfExistingRBAC(ctx context.Context, in *operatorsv1.ScopeInstance) (map[string]rbacv1.RoleBinding, map[string]rbacv1.ClusterRoleBinding, error) {
-	existingRoleBindingList := &rbacv1.RoleBindingList{}
-	existingClusterRoleBindingList := &rbacv1.ClusterRoleBindingList{}
-
-	// Get the existing ClusterRoleBinding
-	if err := r.Client.List(ctx, existingClusterRoleBindingList, client.MatchingLabels{
-		"operators.coreos.io/scopeInstance": string(in.GetUID()),
-	}); err != nil {
-		return nil, nil, err
-	}
-
-	// look at namespaces - map of run time objects - think of this later
-	// Get the existing RoleBindings
-	if err := r.Client.List(ctx, existingRoleBindingList, client.MatchingLabels{
-		"operators.coreos.io/scopeInstance": string(in.GetUID()),
-	}); err != nil {
-		return nil, nil, err
-	}
-
-	//Create Map(Key, value) pair of existing Clusterrole binding.
-	// it will help to seperate the clusterrolebinding which we have to create and delete unnecessaty ones
-	clusterRoleBindingMap := make(map[string]rbacv1.ClusterRoleBinding)
-	for _, crb := range existingClusterRoleBindingList.Items {
-		clusterRoleBindingMap[crb.RoleRef.Name] = crb
-	}
-
-	//Create Map(Key, value) pair of existing role binding.
-	// it will help to seperate the rolebinding which we have to create and delete unnecessaty ones
-	roleBindingMap := make(map[string]rbacv1.RoleBinding)
-	for _, rb := range existingRoleBindingList.Items {
-		roleBindingMap[rb.GetNamespace()+"-"+rb.RoleRef.Name] = rb
-	}
-
-	return roleBindingMap, clusterRoleBindingMap, nil
+// HashObject calculates a hash from an object
+func HashObject(obj interface{}) string {
+	hasher := fnv.New32a()
+	deepHashObject(hasher, &obj)
+	return rand.SafeEncodeString(fmt.Sprint(hasher.Sum32()))
 }
 
-func (r *ScopeInstanceReconciler) ensureRBAC(ctx context.Context, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) error {
+// DeepHashObject writes specified object to hash using the spew library
+// which follows pointers and prints actual values of the nested objects
+// ensuring the hash does not change when a pointer changes.
+func deepHashObject(hasher hash.Hash, objectToWrite interface{}) {
+	hasher.Reset()
+	printer := spew.ConfigState{
+		Indent:         " ",
+		SortKeys:       true,
+		DisableMethods: true,
+		SpewKeys:       true,
+	}
+	printer.Fprintf(hasher, "%#v", objectToWrite)
+}
 
-	objects := []client.Object{}
+func (r *ScopeInstanceReconciler) ensureBindings(ctx context.Context, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) error {
 	// it will create clusterrole as shown below if no namespace is provided
+	// TODO: refactor code to handle both roleBindings and clusterRoleBindings
 	if len(in.Spec.Namespaces) == 0 {
 		for _, cr := range st.Spec.ClusterRoles {
-			objects = append(objects, &rbacv1.ClusterRoleBinding{
+			crb := &rbacv1.ClusterRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: cr.GenerateName + "-",
 					Labels: map[string]string{
-						"operators.coreos.io/scopeInstance": string(in.GetUID()),
+						scopeInstanceUIDKey:           string(in.GetUID()),
+						scopeTemplateUIDKey:           string(st.GetUID()),
+						scopeInstanceHashKey:          HashObject(in.Spec),
+						scopeTemplateHashKey:          HashObject(st.Spec),
+						clusterRoleBindingGenerateKey: cr.GenerateName,
 					},
 					OwnerReferences: []metav1.OwnerReference{{
 						APIVersion: in.APIVersion,
@@ -179,18 +205,60 @@ func (r *ScopeInstanceReconciler) ensureRBAC(ctx context.Context, in *operatorsv
 					Name:     cr.GenerateName,
 					APIGroup: "rbac.authorization.k8s.io",
 				},
-			})
+			}
+
+			crbList := &rbacv1.ClusterRoleBindingList{}
+			if err := r.Client.List(ctx, crbList, client.MatchingLabels{
+				scopeInstanceUIDKey:           string(in.GetUID()),
+				scopeTemplateUIDKey:           string(st.GetUID()),
+				clusterRoleBindingGenerateKey: cr.GenerateName,
+			}); err != nil {
+				return err
+			}
+
+			if len(crbList.Items) > 1 {
+				return fmt.Errorf("more than one ClusterRoleBinding found for ClusterRole %s", cr.GenerateName)
+			}
+
+			// GenerateName is immutable, so create the object if it has changed
+			if len(crbList.Items) == 0 {
+				if err := r.Client.Create(ctx, crb); err != nil {
+					return err
+				}
+				continue
+			}
+
+			existingCRB := &crbList.Items[0]
+
+			if util.IsOwnedByLabel(existingCRB.DeepCopy(), in) &&
+				reflect.DeepEqual(existingCRB.Subjects, crb.Subjects) &&
+				reflect.DeepEqual(existingCRB.Labels, crb.Labels) {
+				r.logger.Info("Existing ClusterRoleBinding does not need to be updated")
+				return nil
+			}
+			existingCRB.Labels = crb.Labels
+			existingCRB.OwnerReferences = crb.OwnerReferences
+			existingCRB.Subjects = crb.Subjects
+
+			if err := r.Client.Update(ctx, existingCRB); err != nil {
+				return err
+			}
+
 		}
 	} else {
 		// it will iterate over the namespace and createrole bindings for each cluster roles
 		for _, namespace := range in.Spec.Namespaces {
 			for _, cr := range st.Spec.ClusterRoles {
-				objects = append(objects, &rbacv1.RoleBinding{
+				rb := &rbacv1.RoleBinding{
 					ObjectMeta: metav1.ObjectMeta{
 						GenerateName: cr.GenerateName + "-",
 						Namespace:    namespace,
 						Labels: map[string]string{
-							"operators.coreos.io/scopeInstance": string(in.GetUID()),
+							scopeInstanceUIDKey:           string(in.GetUID()),
+							scopeTemplateUIDKey:           string(st.GetUID()),
+							scopeInstanceHashKey:          HashObject(in.Spec),
+							scopeTemplateHashKey:          HashObject(st.Spec),
+							clusterRoleBindingGenerateKey: cr.GenerateName,
 						},
 						OwnerReferences: []metav1.OwnerReference{{
 							APIVersion: in.APIVersion,
@@ -205,180 +273,83 @@ func (r *ScopeInstanceReconciler) ensureRBAC(ctx context.Context, in *operatorsv
 						Name:     cr.GenerateName,
 						APIGroup: "rbac.authorization.k8s.io",
 					},
-				})
-
-			}
-		}
-	}
-
-	if objects != nil {
-		if err := r.createRBAC(ctx, objects); err != nil {
-			log.Log.Info("Error in creating Role Bindings", "error", err)
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *ScopeInstanceReconciler) createRBAC(ctx context.Context, objects []client.Object) error {
-	// Create Objects
-	for _, object := range objects {
-
-		log.Log.Info("Creating object")
-		if err := r.Client.Create(ctx, object); err != nil {
-			if k8sapierrors.IsAlreadyExists(err) {
-				log.Log.Info("RBAC is already Present", "Object", object.GetName())
-				continue
-			}
-
-			log.Log.Error(err, "Error creating object", "object", object)
-			return err
-			/// TODO: try to create all the (cluster)roleBindings before returning an aggregate error.
-		}
-	}
-	return nil
-}
-
-func (r *ScopeInstanceReconciler) updateRBAC(ctx context.Context, objects []client.Object) error {
-	// Update Objects
-	for _, object := range objects {
-
-		log.Log.Info("Updating object")
-		if err := r.Client.Update(ctx, object); err != nil {
-			log.Log.Error(err, "Error Updating object", "object", object)
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *ScopeInstanceReconciler) ensureUpdateOfRBAC(ctx context.Context, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate, clusterRoleBindingMap map[string]rbacv1.ClusterRoleBinding, roleBindingMap map[string]rbacv1.RoleBinding) error {
-
-	listUpdateObjects := []client.Object{}
-	// it will create clusterrole as shown below if no namespace is provided
-	for _, cr := range st.Spec.ClusterRoles {
-
-		if obj, found := clusterRoleBindingMap[cr.GenerateName]; found {
-
-			updateObjects := &rbacv1.ClusterRoleBinding{
-				ObjectMeta: metav1.ObjectMeta{
-					GenerateName: cr.GenerateName + "-",
-					Labels: map[string]string{
-						"operators.coreos.io/scopeInstance": string(in.GetUID()),
-					},
-				},
-				Subjects: cr.Subjects,
-				RoleRef: rbacv1.RoleRef{
-					Kind:     "ClusterRole",
-					Name:     cr.GenerateName,
-					APIGroup: "rbac.authorization.k8s.io",
-				},
-			}
-
-			if util.IsOwnedByLabel(obj.DeepCopy(), in) &&
-				obj.RoleRef == updateObjects.RoleRef &&
-				reflect.DeepEqual(updateObjects.Subjects, obj.Subjects) {
-				r.logger.Info("Existing ClusterRoleBinding does not need to be updated")
-				return nil
-			}
-			updateObjects.OwnerReferences = obj.OwnerReferences
-			updateObjects.Subjects = obj.Subjects
-			updateObjects.RoleRef = obj.RoleRef
-			listUpdateObjects = append(listUpdateObjects, updateObjects)
-			delete(clusterRoleBindingMap, cr.GenerateName)
-		}
-	}
-
-	// it will iterate over the namespace and createrole bindings for each cluster roles
-	for _, namespace := range in.Spec.Namespaces {
-		for _, cr := range st.Spec.ClusterRoles {
-
-			key := namespace + "-" + cr.GenerateName
-			if obj, found := roleBindingMap[key]; found {
-				updateObjects := &rbacv1.RoleBinding{
-					ObjectMeta: metav1.ObjectMeta{
-						GenerateName: cr.GenerateName + "-",
-						Namespace:    namespace,
-						Labels: map[string]string{
-							"operators.coreos.io/scopeInstance": string(in.GetUID()),
-						},
-					},
-					Subjects: cr.Subjects,
-					RoleRef: rbacv1.RoleRef{
-						Kind:     "ClusterRole",
-						Name:     cr.GenerateName,
-						APIGroup: "rbac.authorization.k8s.io",
-					},
 				}
 
-				if util.IsOwnedByLabel(obj.DeepCopy(), in) &&
-					obj.RoleRef == updateObjects.RoleRef &&
-					reflect.DeepEqual(updateObjects.Subjects, obj.Subjects) {
-					log.Log.Info("Existing RoleBinding does not need to be updated")
+				rbList := &rbacv1.RoleBindingList{}
+				if err := r.Client.List(ctx, rbList, &client.ListOptions{
+					Namespace: namespace,
+				}, client.MatchingLabels{
+					scopeInstanceUIDKey:           string(in.GetUID()),
+					scopeTemplateUIDKey:           string(st.GetUID()),
+					clusterRoleBindingGenerateKey: cr.GenerateName,
+				}); err != nil {
+					return err
+				}
+
+				if len(rbList.Items) > 1 {
+					return fmt.Errorf("more than one roleBinding found for ClusterRole %s", cr.GenerateName)
+				}
+
+				// GenerateName is immutable, so create the object if it has changed
+				if len(rbList.Items) == 0 {
+					if err := r.Client.Create(ctx, rb); err != nil {
+						return err
+					}
+					continue
+				}
+
+				log.Log.Info("Updating existing rb", "namespaced", rbList.Items[0].GetNamespace(), "name", rbList.Items[0].GetName())
+
+				existingRB := &rbList.Items[0]
+
+				if util.IsOwnedByLabel(existingRB.DeepCopy(), in) &&
+					reflect.DeepEqual(existingRB.Subjects, rb.Subjects) &&
+					reflect.DeepEqual(existingRB.Labels, rb.Labels) {
+					r.logger.Info("Existing ClusterRoleBinding does not need to be updated")
 					return nil
 				}
-				updateObjects.OwnerReferences = obj.OwnerReferences
-				updateObjects.Subjects = obj.Subjects
-				updateObjects.RoleRef = obj.RoleRef
-				listUpdateObjects = append(listUpdateObjects, updateObjects)
-				delete(roleBindingMap, key)
+				existingRB.Labels = rb.Labels
+				existingRB.OwnerReferences = rb.OwnerReferences
+				existingRB.Subjects = rb.Subjects
+
+				if err := r.Client.Update(ctx, existingRB); err != nil {
+					return err
+				}
 			}
 		}
 	}
 
-	if listUpdateObjects != nil {
-		if err := r.updateRBAC(ctx, listUpdateObjects); err != nil {
-			log.Log.Info("Error in Updating Role Bindings", "error", err)
-			return err
-		}
-	}
-
 	return nil
 }
 
-func (r *ScopeInstanceReconciler) cleanupInvalidRBAC(ctx context.Context, clusterRoleBindingMap map[string]rbacv1.ClusterRoleBinding, roleBindingMap map[string]rbacv1.RoleBinding) error {
-	deleteObjects := []client.Object{}
-	// below is for cleanup, check if Map(Key, value) of Role Binding is empty or not if not then those
-	// are remaining ones which we have to delete
-	for key, element := range roleBindingMap {
-		split := strings.Split(key, "-")
-
-		deleteObjects = append(deleteObjects, &rbacv1.RoleBinding{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      element.GetName(),
-				Namespace: split[0],
-			},
-		})
+// TODO: use a client.DeleteAllOf instead of a client.List -> delete
+func (r *ScopeInstanceReconciler) deleteBindings(ctx context.Context, listOptions ...client.ListOption) error {
+	clusterRoleBindings := &rbacv1.ClusterRoleBindingList{}
+	if err := r.Client.List(ctx, clusterRoleBindings, listOptions...); err != nil {
+		// TODO: Aggregate errors
+		return err
 	}
 
-	// below is for cleanup, check if Map(Key, value) of Cluster Role Binding is empty or not if not then those
-	// are remaining ones which we have to delete
-	for _, element := range clusterRoleBindingMap {
-		deleteObjects = append(deleteObjects, &rbacv1.ClusterRoleBinding{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: element.GetName(),
-			},
-		})
-	}
-
-	if deleteObjects != nil {
-		if err := r.deleteRBAC(ctx, deleteObjects); err != nil {
-			log.Log.Info("Error in deleting Role Bindings", "error", err)
+	for _, crb := range clusterRoleBindings.Items {
+		// TODO: Aggregate errors
+		if err := r.Client.Delete(ctx, &crb); err != nil && !k8sapierrors.IsNotFound(err) {
 			return err
 		}
 	}
 
-	return nil
-}
+	roleBindings := &rbacv1.RoleBindingList{}
+	if err := r.Client.List(ctx, roleBindings, listOptions...); err != nil {
+		// TODO: Aggregate errors
+		return err
+	}
 
-func (r *ScopeInstanceReconciler) deleteRBAC(ctx context.Context, deleteObjects []client.Object) error {
-	// Delete Unnecessary Objects
-	for _, object := range deleteObjects {
-		if err := r.Client.Delete(ctx, object); err != nil {
+	for _, rb := range roleBindings.Items {
+		// TODO: Aggregate errors
+		if err := r.Client.Delete(ctx, &rb); err != nil && !k8sapierrors.IsNotFound(err) {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -386,11 +357,11 @@ func (r *ScopeInstanceReconciler) deleteRBAC(ctx context.Context, deleteObjects 
 func (r *ScopeInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorsv1.ScopeInstance{}).
-		Watches(&source.Kind{Type: &operatorsv1.ScopeTemplate{}}, handler.EnqueueRequestsFromMapFunc(r.mapToScopInstace)).
+		Watches(&source.Kind{Type: &operatorsv1.ScopeTemplate{}}, handler.EnqueueRequestsFromMapFunc(r.mapToScopInstance)).
 		Complete(r)
 }
 
-func (r *ScopeInstanceReconciler) mapToScopInstace(obj client.Object) (requests []reconcile.Request) {
+func (r *ScopeInstanceReconciler) mapToScopInstance(obj client.Object) (requests []reconcile.Request) {
 	if obj == nil || obj.GetName() == "" {
 		return nil
 	}

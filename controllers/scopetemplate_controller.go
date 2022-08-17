@@ -71,10 +71,11 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 		log.Log.Info("Creating ClusterRole", "name", clusterRole.GenerateName)
 		if err := r.Client.Create(ctx, clusterRole); err != nil {
-			log.Log.Error(err, "Failed to create ClusterRole", "name", clusterRole.GenerateName)
-			if errors.IsAlreadyExists(err) {
-				log.Log.Info("ClusterRole already exists", "name", clusterRole.Name)
+			if !errors.IsAlreadyExists(err) {
+				return ctrl.Result{}, err
 			}
+
+			// TODO: Handle potential update.
 		}
 	}
 
