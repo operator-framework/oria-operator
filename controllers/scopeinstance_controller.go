@@ -19,14 +19,11 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"hash"
-	"hash/fnv"
 	"reflect"
 
 	operatorsv1 "awgreene/scope-operator/api/v1"
 	"awgreene/scope-operator/util"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/rand"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -117,7 +113,7 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		scopeInstanceUIDKey: string(in.GetUID()),
 	}
 
-	requirement, err := labels.NewRequirement(scopeInstanceHashKey, selection.NotEquals, []string{HashObject(in.Spec)})
+	requirement, err := labels.NewRequirement(scopeInstanceHashKey, selection.NotEquals, []string{util.HashObject(in.Spec)})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -137,7 +133,7 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		scopeTemplateUIDKey: string(st.GetUID()),
 	}
 
-	requirement, err = labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{HashObject(st.Spec)})
+	requirement, err = labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -156,27 +152,6 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return ctrl.Result{}, nil
 }
 
-// HashObject calculates a hash from an object
-func HashObject(obj interface{}) string {
-	hasher := fnv.New32a()
-	deepHashObject(hasher, &obj)
-	return rand.SafeEncodeString(fmt.Sprint(hasher.Sum32()))
-}
-
-// DeepHashObject writes specified object to hash using the spew library
-// which follows pointers and prints actual values of the nested objects
-// ensuring the hash does not change when a pointer changes.
-func deepHashObject(hasher hash.Hash, objectToWrite interface{}) {
-	hasher.Reset()
-	printer := spew.ConfigState{
-		Indent:         " ",
-		SortKeys:       true,
-		DisableMethods: true,
-		SpewKeys:       true,
-	}
-	printer.Fprintf(hasher, "%#v", objectToWrite)
-}
-
 func (r *ScopeInstanceReconciler) ensureBindings(ctx context.Context, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) error {
 	// it will create clusterrole as shown below if no namespace is provided
 	// TODO: refactor code to handle both roleBindings and clusterRoleBindings
@@ -188,8 +163,8 @@ func (r *ScopeInstanceReconciler) ensureBindings(ctx context.Context, in *operat
 					Labels: map[string]string{
 						scopeInstanceUIDKey:           string(in.GetUID()),
 						scopeTemplateUIDKey:           string(st.GetUID()),
-						scopeInstanceHashKey:          HashObject(in.Spec),
-						scopeTemplateHashKey:          HashObject(st.Spec),
+						scopeInstanceHashKey:          util.HashObject(in.Spec),
+						scopeTemplateHashKey:          util.HashObject(st.Spec),
 						clusterRoleBindingGenerateKey: cr.GenerateName,
 					},
 					OwnerReferences: []metav1.OwnerReference{{
@@ -256,8 +231,8 @@ func (r *ScopeInstanceReconciler) ensureBindings(ctx context.Context, in *operat
 						Labels: map[string]string{
 							scopeInstanceUIDKey:           string(in.GetUID()),
 							scopeTemplateUIDKey:           string(st.GetUID()),
-							scopeInstanceHashKey:          HashObject(in.Spec),
-							scopeTemplateHashKey:          HashObject(st.Spec),
+							scopeInstanceHashKey:          util.HashObject(in.Spec),
+							scopeTemplateHashKey:          util.HashObject(st.Spec),
 							clusterRoleBindingGenerateKey: cr.GenerateName,
 						},
 						OwnerReferences: []metav1.OwnerReference{{
