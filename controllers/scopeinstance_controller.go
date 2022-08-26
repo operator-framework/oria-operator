@@ -332,11 +332,11 @@ func (r *ScopeInstanceReconciler) deleteBindings(ctx context.Context, listOption
 func (r *ScopeInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorsv1.ScopeInstance{}).
-		Watches(&source.Kind{Type: &operatorsv1.ScopeTemplate{}}, handler.EnqueueRequestsFromMapFunc(r.mapToScopInstance)).
+		Watches(&source.Kind{Type: &operatorsv1.ScopeTemplate{}}, handler.EnqueueRequestsFromMapFunc(r.mapToScopeInstance)).
 		Complete(r)
 }
 
-func (r *ScopeInstanceReconciler) mapToScopInstance(obj client.Object) (requests []reconcile.Request) {
+func (r *ScopeInstanceReconciler) mapToScopeInstance(obj client.Object) (requests []reconcile.Request) {
 	if obj == nil || obj.GetName() == "" {
 		return nil
 	}
