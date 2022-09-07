@@ -42,6 +42,16 @@ type ScopeInstanceStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
+// TODO(everettraven): Add Condition Types and Reasons as part of the API
+const (
+	ScopeInstanceSucceededType = "Succeeded"
+
+	ScopeTemplateNotFoundReason         = "ScopeTemplateNotFound"
+	RoleBindingDeleteFailureReason      = "RoleBindingDeleteFailure"
+	RoleBindingCreateFailureReason      = "RoleBindingCreateFailure"
+	ScopeInstanceReconcileSuccessReason = "ScopeInstanceReconcileSuccess"
+)
+
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:resource:scope=Cluster
