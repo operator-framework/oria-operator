@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,9 +41,12 @@ var _ = Describe("ScopeTemplate", func() {
 		namespace2    *corev1.Namespace
 		scopeTemplate *operatorsv1.ScopeTemplate
 		scopeInstance *operatorsv1.ScopeInstance
+		// Use this to track the test iteration
+		iteration int
 	)
 
 	BeforeEach(func() {
+		iteration += 1
 		namespace = &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: "test-",
@@ -68,7 +72,9 @@ var _ = Describe("ScopeTemplate", func() {
 				Spec: operatorsv1.ScopeTemplateSpec{
 					ClusterRoles: []operatorsv1.ClusterRoleTemplate{
 						{
-							GenerateName: "test",
+							// Create a new ClusterRole for each test iteration so that there are no conflicts with a ClusterRole already existing.
+							// We can deliberately test this scenario in specific tests in the future.
+							GenerateName: fmt.Sprintf("test-%d", iteration),
 							Rules: []rbacv1.PolicyRule{
 								{
 									APIGroups: []string{
@@ -106,6 +112,7 @@ var _ = Describe("ScopeTemplate", func() {
 
 			clusterRoleList := listClusterRole(0, labels)
 			Expect(clusterRoleList.Items).Should(BeNil())
+			verifyScopeTemplateStatus(scopeTemplate, "Succeeded", "ScopeTemplateReconcileSuccess", metav1.ConditionTrue, "ScopeTemplate successfully reconciled")
 		})
 
 		When("a scopeInstance is created that references the scopeTemplate with a single namespace", func() {
@@ -154,18 +161,20 @@ var _ = Describe("ScopeTemplate", func() {
 						Resources: []string{"secrets"},
 					},
 				}))
+				verifyScopeTemplateStatus(scopeTemplate, "Succeeded", "ScopeTemplateReconcileSuccess", metav1.ConditionTrue, "ScopeTemplate successfully reconciled")
 			})
 
 			It("should create the expected RoleBinding within the test namespace", func() {
 				labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
 					scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
-					clusterRoleBindingGenerateKey: "test"}
+					clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
 
 				roleBindingList := listRoleBinding(namespace.GetName(), 1, labels)
 
 				existingRB := &roleBindingList.Items[0]
 
 				verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
+				verifyScopeTemplateStatus(scopeTemplate, "Succeeded", "ScopeTemplateReconcileSuccess", metav1.ConditionTrue, "ScopeTemplate successfully reconciled")
 			})
 
 			When("a scopeInstance is updated to include another namespace", func() {
@@ -197,7 +206,7 @@ var _ = Describe("ScopeTemplate", func() {
 
 					labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
 						scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
-						clusterRoleBindingGenerateKey: "test"}
+						clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
 
 					roleBindingList := listRoleBinding(namespace2.GetName(), 1, labels)
 
@@ -209,6 +218,7 @@ var _ = Describe("ScopeTemplate", func() {
 
 					existingRB = &roleBindingList.Items[0]
 					verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
+					verifyScopeTemplateStatus(scopeTemplate, "Succeeded", "ScopeTemplateReconcileSuccess", metav1.ConditionTrue, "ScopeTemplate successfully reconciled")
 				})
 
 				When("a scopeInstance is updated to remove one of the namespace", func() {
@@ -227,7 +237,7 @@ var _ = Describe("ScopeTemplate", func() {
 
 						labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
 							scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
-							clusterRoleBindingGenerateKey: "test"}
+							clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
 
 						roleBindingList := listRoleBinding(namespace2.GetName(), 1, labels)
 
@@ -236,7 +246,7 @@ var _ = Describe("ScopeTemplate", func() {
 						verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
 
 						roleBindingList = listRoleBinding(namespace.GetName(), 0, labels)
-
+						verifyScopeTemplateStatus(scopeTemplate, "Succeeded", "ScopeTemplateReconcileSuccess", metav1.ConditionTrue, "ScopeTemplate successfully reconciled")
 					})
 
 					When("a scopeInstance is updated to remove all namespaces", func() {
@@ -259,7 +269,7 @@ var _ = Describe("ScopeTemplate", func() {
 									client.MatchingLabels{
 										scopeInstanceUIDKey:           string(scopeInstance.GetUID()),
 										scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
-										clusterRoleBindingGenerateKey: "test",
+										clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName,
 									})
 								if err != nil {
 									return err
@@ -290,19 +300,20 @@ var _ = Describe("ScopeTemplate", func() {
 							}))
 							Expect(existingCRB.RoleRef).To(Equal(rbacv1.RoleRef{
 								Kind:     "ClusterRole",
-								Name:     "test",
+								Name:     scopeTemplate.Spec.ClusterRoles[0].GenerateName,
 								APIGroup: "rbac.authorization.k8s.io",
 							}))
 
 							labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
 								scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
-								clusterRoleBindingGenerateKey: "test"}
+								clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
 
 							roleBindingList := listRoleBinding(namespace.GetName(), 0, labels)
 							Expect(len(roleBindingList.Items)).To(Equal(0))
 
 							roleBindingList = listRoleBinding(namespace2.GetName(), 0, labels)
 							Expect(len(roleBindingList.Items)).To(Equal(0))
+							verifyScopeTemplateStatus(scopeTemplate, "Succeeded", "ScopeTemplateReconcileSuccess", metav1.ConditionTrue, "ScopeTemplate successfully reconciled")
 						})
 					})
 				})
@@ -329,9 +340,27 @@ func verifyRoleBindings(existingRB *rbacv1.RoleBinding, si *operatorsv1.ScopeIns
 	}))
 	Expect(existingRB.RoleRef).To(Equal(rbacv1.RoleRef{
 		Kind:     "ClusterRole",
-		Name:     "test",
+		Name:     st.Spec.ClusterRoles[0].GenerateName,
 		APIGroup: "rbac.authorization.k8s.io",
 	}))
+}
+
+func verifyScopeTemplateStatus(st *operatorsv1.ScopeTemplate, conditionType string, reason string, status metav1.ConditionStatus, message string) {
+	tempSt := &operatorsv1.ScopeTemplate{}
+	Eventually(func() error {
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(st), tempSt)).NotTo(HaveOccurred())
+		if len(tempSt.Status.Conditions) == 0 {
+			return fmt.Errorf("status.conditions len not > 0")
+		}
+		return nil
+	}).Should(Succeed())
+
+	cond := meta.FindStatusCondition(tempSt.Status.Conditions, conditionType)
+	Expect(cond).ShouldNot(BeNil())
+	Expect(cond.ObservedGeneration).Should(Equal(tempSt.Generation))
+	Expect(cond.Reason).Should(Equal(reason))
+	Expect(cond.Status).Should(Equal(status))
+	Expect(cond.Message).Should(Equal(message))
 }
 
 func listRoleBinding(namespace string, numberOfExpectedRoleBindings int, labels map[string]string) *rbacv1.RoleBindingList {

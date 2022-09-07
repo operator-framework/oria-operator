@@ -27,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -79,7 +80,16 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	scopeinstances := operatorsv1.ScopeInstanceList{}
 
-	if err := r.Client.List(ctx, &scopeinstances, client.InNamespace(st.Namespace)); err != nil {
+	if err := r.Client.List(ctx, &scopeinstances, &client.ListOptions{}); err != nil {
+		r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
+			Type:               "Succeeded",
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: st.Generation,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "ScopeInstanceListFailure",
+			Message:            fmt.Sprintf("failed to list ScopeInstances: %s", err),
+		})
+
 		return ctrl.Result{}, err
 	}
 
@@ -96,12 +106,28 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// create ClusterRoles based on the ScopeTemplate
 		log.Log.Info("ScopeInstance found that references ScopeTemplate", "name", st.Name)
 		if err := r.ensureClusterRoles(ctx, st); err != nil {
+			r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
+				Type:               "Succeeded",
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: st.Generation,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "ClusterRoleCreateFailure",
+				Message:            fmt.Sprintf("failed to create ClusterRoles: %s", err),
+			})
 			return ctrl.Result{}, fmt.Errorf("Error in create ClusterRoles: %v", err)
 		}
 
 		// Add requirement to delete old hashes
 		requirement, err := labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
 		if err != nil {
+			r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
+				Type:               "Succeeded",
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: st.Generation,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "DeleteOldHashRequirementFailure",
+				Message:            fmt.Sprintf("failed to add a requirement to delete old hashes: %s", err),
+			})
 			return ctrl.Result{}, err
 		}
 		listOptions = append(listOptions, &client.ListOptions{
@@ -111,10 +137,27 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	if err := r.deleteClusterRoles(ctx, listOptions...); err != nil {
+		r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
+			Type:               "Succeeded",
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: st.Generation,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "DeleteClusterRolesFailure",
+			Message:            fmt.Sprintf("failed to delete ClusterRoles: %s", err),
+		})
 		return ctrl.Result{}, err
 	}
 
 	log.Log.Info("No ScopeTemplate error")
+
+	r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
+		Type:               "Succeeded",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: st.Generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "ScopeTemplateReconcileSuccess",
+		Message:            "ScopeTemplate successfully reconciled",
+	})
 
 	return ctrl.Result{}, nil
 }
@@ -229,4 +272,21 @@ func (r *ScopeTemplateReconciler) deleteClusterRoles(ctx context.Context, listOp
 		}
 	}
 	return nil
+}
+
+func (r *ScopeTemplateReconciler) updateScopeTemplateCondition(ctx context.Context, st *operatorsv1.ScopeTemplate, condition metav1.Condition) {
+	// Get the latest instance of the ScopeTemplate in case it has been updated
+	tempSt := &operatorsv1.ScopeTemplate{}
+	err := r.Client.Get(ctx, client.ObjectKeyFromObject(st), tempSt)
+	if err != nil {
+		log.Log.Error(err, "failed to get the latest version of the ScopeTemplate to update the ScopeTemplate status")
+		return
+	}
+	// Update the condition of the ScopeTemplate
+	meta.SetStatusCondition(&tempSt.Status.Conditions, condition)
+
+	condErr := r.Status().Update(ctx, tempSt, &client.UpdateOptions{})
+	if condErr != nil {
+		log.Log.Error(condErr, "failed to update .Status.Condition of ScopeTemplate", "Condition", condition)
+	}
 }
