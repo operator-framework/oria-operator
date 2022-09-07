@@ -27,6 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -87,6 +88,14 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	st := &operatorsv1.ScopeTemplate{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: in.Spec.ScopeTemplateName}, st); err != nil {
 		if !k8sapierrors.IsNotFound(err) {
+			r.updateScopeTemplateCondition(ctx, in, metav1.Condition{
+				Type:               "Succeeded",
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: in.Generation,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "ScopeTemplateNotFound",
+				Message:            fmt.Sprintf("ScopeTemplate `%s` could not be found: %s", in.Spec.ScopeTemplateName, err),
+			})
 			return ctrl.Result{}, err
 		}
 
@@ -97,6 +106,14 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 		if err := r.deleteBindings(ctx, listOption); err != nil {
 			log.Log.Info("Error in deleting Role Bindings", "error", err)
+			r.updateScopeTemplateCondition(ctx, in, metav1.Condition{
+				Type:               "Succeeded",
+				Status:             metav1.ConditionFalse,
+				ObservedGeneration: in.Generation,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "RoleBindingDeleteFailure",
+				Message:            fmt.Sprintf("failed to delete RoleBindings associated with ScopeInstance `%s`: %s", in.Name, err),
+			})
 			return ctrl.Result{}, err
 		}
 
@@ -106,6 +123,14 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// create required roleBindings and clusterRoleBindings.
 	if err := r.ensureBindings(ctx, in, st); err != nil {
 		log.Log.Info("Error in creating Role Bindings", "error", err)
+		r.updateScopeTemplateCondition(ctx, in, metav1.Condition{
+			Type:               "Succeeded",
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: in.Generation,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "RoleBindingCreateFailure",
+			Message:            fmt.Sprintf("failed to create RoleBindings for ScopeInstance `%s`: %s", in.Name, err),
+		})
 		return ctrl.Result{}, err
 	}
 
@@ -115,6 +140,14 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	requirement, err := labels.NewRequirement(scopeInstanceHashKey, selection.NotEquals, []string{util.HashObject(in.Spec)})
 	if err != nil {
+		r.updateScopeTemplateCondition(ctx, in, metav1.Condition{
+			Type:               "Succeeded",
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: in.Generation,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "NewRequirementLabelFailure",
+			Message:            fmt.Sprintf("failed to create a new requirement label associated with ScopeInstance `%s`: %s", in.Name, err),
+		})
 		return ctrl.Result{}, err
 	}
 
@@ -123,6 +156,14 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	if err := r.deleteBindings(ctx, listOption, listOptions); err != nil {
+		r.updateScopeTemplateCondition(ctx, in, metav1.Condition{
+			Type:               "Succeeded",
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: in.Generation,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "RoleBindingDeleteFailure",
+			Message:            fmt.Sprintf("failed to delete RoleBindings associated with ScopeInstance `%s`: %s", in.Name, err),
+		})
 		log.Log.Info("Error in deleting Role Bindings", "error", err)
 		return ctrl.Result{}, err
 	}
@@ -135,6 +176,14 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	requirement, err = labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
 	if err != nil {
+		r.updateScopeTemplateCondition(ctx, in, metav1.Condition{
+			Type:               "Succeeded",
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: in.Generation,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "NewRequirementLabelFailure",
+			Message:            fmt.Sprintf("failed to create a new requirement label associated with ScopeInstance `%s`: %s", in.Name, err),
+		})
 		return ctrl.Result{}, err
 	}
 
@@ -143,11 +192,28 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	if err := r.deleteBindings(ctx, listOption, listOptions); err != nil {
+		r.updateScopeTemplateCondition(ctx, in, metav1.Condition{
+			Type:               "Succeeded",
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: in.Generation,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "RoleBindingDeleteFailure",
+			Message:            fmt.Sprintf("failed to delete RoleBindings associated with ScopeInstance `%s`: %s", in.Name, err),
+		})
 		log.Log.Info("Error in deleting Role Bindings", "error", err)
 		return ctrl.Result{}, err
 	}
 
 	log.Log.Info("No ScopeInstance error")
+
+	r.updateScopeTemplateCondition(ctx, in, metav1.Condition{
+		Type:               "Succeeded",
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: st.Generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "ScopeInstanceReconcileSuccess",
+		Message:            fmt.Sprintf("ScopeInstance `%s` successfully reconciled", in.Name),
+	})
 
 	return ctrl.Result{}, nil
 }
@@ -363,4 +429,21 @@ func (r *ScopeInstanceReconciler) mapToScopeInstance(obj client.Object) (request
 	}
 
 	return
+}
+
+func (r *ScopeInstanceReconciler) updateScopeTemplateCondition(ctx context.Context, si *operatorsv1.ScopeInstance, condition metav1.Condition) {
+	// Get the latest instance of the ScopeTemplate in case it has been updated
+	tempSi := &operatorsv1.ScopeInstance{}
+	err := r.Client.Get(ctx, client.ObjectKeyFromObject(si), tempSi)
+	if err != nil {
+		log.Log.Error(err, "failed to get the latest version of the ScopeInstance to update the ScopeInstance status")
+		return
+	}
+	// Update the condition of the ScopeTemplate
+	meta.SetStatusCondition(&tempSi.Status.Conditions, condition)
+
+	condErr := r.Status().Update(ctx, tempSi, &client.UpdateOptions{})
+	if condErr != nil {
+		log.Log.Error(condErr, "failed to update .Status.Condition of ScopeInstance", "Condition", condition)
+	}
 }
