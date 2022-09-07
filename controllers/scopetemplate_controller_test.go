@@ -104,7 +104,7 @@ var _ = Describe("ScopeTemplate", func() {
 			labels := map[string]string{scopeTemplateUIDKey: string(scopeTemplate.GetUID()),
 				clusterRoleGenerateKey: "test"}
 
-			clusterRoleList := listCluserRole(0, labels)
+			clusterRoleList := listClusterRole(0, labels)
 			Expect(clusterRoleList.Items).Should(BeNil())
 		})
 
@@ -135,7 +135,7 @@ var _ = Describe("ScopeTemplate", func() {
 				labels := map[string]string{scopeTemplateUIDKey: string(scopeTemplate.GetUID()),
 					clusterRoleGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
 
-				clusterRoleList := listCluserRole(1, labels)
+				clusterRoleList := listClusterRole(1, labels)
 
 				existingRole := clusterRoleList.Items[0]
 
@@ -353,7 +353,7 @@ func listRoleBinding(namespace string, numberOfExpectedRoleBindings int, labels 
 	return roleBindingList
 }
 
-func listCluserRole(numberOfExpectedRoleBindings int, labels map[string]string) *rbacv1.ClusterRoleList {
+func listClusterRole(numberOfExpectedRoleBindings int, labels map[string]string) *rbacv1.ClusterRoleList {
 	clusterRoleList := &rbacv1.ClusterRoleList{}
 	Eventually(func() error {
 		// TODO: scopeTemplate should check for status that no clusterRole exists.
