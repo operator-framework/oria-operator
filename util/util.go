@@ -18,7 +18,7 @@ type Owner interface {
 }
 
 const (
-	OwnerLabel = "operators.coreos.io/scopeInstance"
+	OwnerLabel = "operators.coreos.io/scopeInstanceUID"
 )
 
 func IsOwnedByLabel(object metav1.Object, owner Owner) bool {
@@ -36,7 +36,18 @@ func IsOwnedByLabel(object metav1.Object, owner Owner) bool {
 }
 
 func GetOwnerByLabel(object metav1.Object, owner Owner) (ok bool) {
-	return object.GetLabels()[OwnerLabel] == string(owner.GetUID())
+	if object == nil || owner == nil {
+		// let's not panic in simple ways
+		return false
+	}
+
+	label, ok := object.GetLabels()[OwnerLabel]
+	if !ok {
+		// if there is no label, we return false
+		return false
+	}
+
+	return label == string(owner.GetUID())
 }
 
 func GetOwnerByRef(object metav1.Object, owner Owner) (ok bool) {
