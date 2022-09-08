@@ -14,6 +14,7 @@ var _ = Describe("Util", func() {
 
 	Describe("IsOwnedByLabel", func() {
 	})
+
 	Describe("GetOwnerByLabel", func() {
 		var (
 			owner *operatorsv1.ScopeInstance
@@ -38,7 +39,6 @@ var _ = Describe("Util", func() {
 			rb = rbacv1.RoleBinding{
 				TypeMeta: metav1.TypeMeta{
 					Kind: "RoleBinding",
-					// APIVersion: "operators.io.operator-framework/v1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "foo-rb",
@@ -76,7 +76,68 @@ var _ = Describe("Util", func() {
 			Expect(GetOwnerByLabel(nil, owner)).To(Equal(false))
 		})
 	})
+
 	Describe("GetOwnerByRef", func() {
+		var (
+			owner *operatorsv1.ScopeInstance
+			rb    rbacv1.RoleBinding
+		)
+		BeforeEach(func() {
+			// create owner and rb here
+			owner = &operatorsv1.ScopeInstance{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "ScopeInstance",
+					APIVersion: "operators.io.operator-framework/v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "scopeinstance-name",
+					UID:  "uid",
+				},
+				Spec: operatorsv1.ScopeInstanceSpec{
+					ScopeTemplateName: "scopeinstance-name",
+					Namespaces:        []string{"test-foo"},
+				},
+			}
+
+			rb = rbacv1.RoleBinding{
+				TypeMeta: metav1.TypeMeta{
+					Kind: "RoleBinding",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo-rb",
+				},
+			}
+		})
+		It("should return false if the owner is not referenced by the object", func() {
+			// not referenced at all
+			Expect(GetOwnerByRef(rb.DeepCopy(), owner)).To(Equal(false))
+
+			// reference a different owner from object
+			rb.SetOwnerReferences([]metav1.OwnerReference{{
+				APIVersion: owner.APIVersion,
+				Kind:       owner.Kind,
+				Name:       "scopeinstance-name",
+				UID:        "anotheruid",
+			}})
+
+			Expect(GetOwnerByRef(rb.DeepCopy(), owner)).To(Equal(false))
+		})
+		It("should return true if the owner is referenced by the object", func() {
+			// reference owner from object
+			rb.SetOwnerReferences([]metav1.OwnerReference{{
+				APIVersion: owner.APIVersion,
+				Kind:       owner.Kind,
+				Name:       "scopeinstance-name",
+				UID:        "uid",
+			}})
+
+			Expect(GetOwnerByRef(rb.DeepCopy(), owner)).To(Equal(true))
+		})
+		It("should return false if either option is nil", func() {
+			Expect(GetOwnerByRef(nil, nil)).To(Equal(false))
+			Expect(GetOwnerByRef(rb.DeepCopy(), nil)).To(Equal(false))
+			Expect(GetOwnerByRef(nil, owner)).To(Equal(false))
+		})
 	})
 
 	Describe("HashObject", func() {

@@ -51,6 +51,11 @@ func GetOwnerByLabel(object metav1.Object, owner Owner) (ok bool) {
 }
 
 func GetOwnerByRef(object metav1.Object, owner Owner) (ok bool) {
+	if object == nil || owner == nil {
+		// let's not panic in simple ways
+		return false
+	}
+
 	for _, oref := range object.GetOwnerReferences() {
 		if string(oref.UID) == string(owner.GetUID()) {
 			return true
