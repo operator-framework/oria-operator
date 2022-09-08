@@ -24,7 +24,6 @@ import (
 	operatorsv1 "awgreene/scope-operator/api/v1"
 	"awgreene/scope-operator/util"
 
-	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,8 +43,6 @@ import (
 type ScopeTemplateReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-
-	logger *logrus.Logger
 }
 
 const (
@@ -201,7 +198,7 @@ func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *op
 		if util.IsOwnedByLabel(existingCRB.DeepCopy(), st) &&
 			reflect.DeepEqual(existingCRB.Rules, clusterRole.Rules) &&
 			reflect.DeepEqual(existingCRB.Labels, clusterRole.Labels) {
-			r.logger.Debug("Existing ClusterRoleBinding does not need to be updated")
+			log.Log.Info("existing ClusterRoleBinding does not need to be updated")
 			return nil
 		}
 		existingCRB.Labels = clusterRole.Labels
