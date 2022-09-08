@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	operatorsv1 "awgreene/scope-operator/api/v1"
+	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
 	"awgreene/scope-operator/controllers"
 	//+kubebuilder:scaffold:imports
 )

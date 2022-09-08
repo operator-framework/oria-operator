@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"reflect"
 
-	operatorsv1 "awgreene/scope-operator/api/v1"
+	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
 	"awgreene/scope-operator/util"
 
 	"github.com/sirupsen/logrus"
