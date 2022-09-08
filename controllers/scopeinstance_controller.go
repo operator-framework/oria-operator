@@ -88,17 +88,18 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	st := &operatorsv1.ScopeTemplate{}
 	if err := r.Client.Get(ctx, client.ObjectKey{Name: in.Spec.ScopeTemplateName}, st); err != nil {
 		if !k8sapierrors.IsNotFound(err) {
-			cErr := r.updateScopeInstanceCondition(ctx, in, metav1.Condition{
-				Type:               operatorsv1.ScopeInstanceSucceededType,
-				Status:             metav1.ConditionFalse,
-				ObservedGeneration: in.Generation,
-				Reason:             operatorsv1.ScopeTemplateNotFoundReason,
-				Message:            fmt.Sprintf("getting ScopeTemplate %q: %s", in.Spec.ScopeTemplateName, err),
-			})
-			if cErr != nil {
-				return ctrl.Result{Requeue: true}, cErr
-			}
 			return ctrl.Result{}, err
+		}
+
+		cErr := r.updateScopeInstanceCondition(ctx, in, metav1.Condition{
+			Type:               operatorsv1.TypeScoped,
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: in.Generation,
+			Reason:             operatorsv1.ReasonScopeTemplateNotFound,
+			Message:            fmt.Sprintf("getting ScopeTemplate %q: %s", in.Spec.ScopeTemplateName, err),
+		})
+		if cErr != nil {
+			return ctrl.Result{Requeue: true}, cErr
 		}
 
 		// Delete anything owned by the scopeInstance if the scopeTemplate is gone.
@@ -109,10 +110,10 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if err := r.deleteBindings(ctx, listOption); err != nil {
 			log.Log.Info("Error in deleting Role Bindings", "error", err)
 			cErr := r.updateScopeInstanceCondition(ctx, in, metav1.Condition{
-				Type:               operatorsv1.ScopeInstanceSucceededType,
+				Type:               operatorsv1.TypeScoped,
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: in.Generation,
-				Reason:             operatorsv1.RoleBindingDeleteFailureReason,
+				Reason:             operatorsv1.ReasonScopingFailed,
 				Message:            fmt.Sprintf("deleting RoleBindings associated with ScopeInstance %q: %v", in.Name, err),
 			})
 			if cErr != nil {
@@ -128,10 +129,10 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err := r.ensureBindings(ctx, in, st); err != nil {
 		log.Log.Info("Error in creating Role Bindings", "error", err)
 		cErr := r.updateScopeInstanceCondition(ctx, in, metav1.Condition{
-			Type:               operatorsv1.ScopeInstanceSucceededType,
+			Type:               operatorsv1.TypeScoped,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: in.Generation,
-			Reason:             operatorsv1.RoleBindingCreateFailureReason,
+			Reason:             operatorsv1.ReasonScopingFailed,
 			Message:            fmt.Sprintf("creating RoleBindings for ScopeInstance %q: %v", in.Name, err),
 		})
 		if cErr != nil {
@@ -147,10 +148,10 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	requirement, err := labels.NewRequirement(scopeInstanceHashKey, selection.NotEquals, []string{util.HashObject(in.Spec)})
 	if err != nil {
 		cErr := r.updateScopeInstanceCondition(ctx, in, metav1.Condition{
-			Type:               operatorsv1.ScopeInstanceSucceededType,
+			Type:               operatorsv1.TypeScoped,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: in.Generation,
-			Reason:             "NewRequirementLabelFailure",
+			Reason:             operatorsv1.ReasonScopingFailed,
 			Message:            fmt.Sprintf("creating a new requirement label associated with ScopeInstance %q: %v", in.Name, err),
 		})
 		if cErr != nil {
@@ -165,10 +166,10 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	if err := r.deleteBindings(ctx, listOption, listOptions); err != nil {
 		cErr := r.updateScopeInstanceCondition(ctx, in, metav1.Condition{
-			Type:               operatorsv1.ScopeInstanceSucceededType,
+			Type:               operatorsv1.TypeScoped,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: in.Generation,
-			Reason:             operatorsv1.RoleBindingDeleteFailureReason,
+			Reason:             operatorsv1.ReasonScopingFailed,
 			Message:            fmt.Sprintf("deleting RoleBindings associated with ScopeInstance %q: %v", in.Name, err),
 		})
 		if cErr != nil {
@@ -187,10 +188,10 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	requirement, err = labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
 	if err != nil {
 		cErr := r.updateScopeInstanceCondition(ctx, in, metav1.Condition{
-			Type:               operatorsv1.ScopeInstanceSucceededType,
+			Type:               operatorsv1.TypeScoped,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: in.Generation,
-			Reason:             "NewRequirementLabelFailure",
+			Reason:             operatorsv1.ReasonScopingFailed,
 			Message:            fmt.Sprintf("creating a new requirement label associated with ScopeInstance %q: %v", in.Name, err),
 		})
 		if cErr != nil {
@@ -205,10 +206,10 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	if err := r.deleteBindings(ctx, listOption, listOptions); err != nil {
 		cErr := r.updateScopeInstanceCondition(ctx, in, metav1.Condition{
-			Type:               operatorsv1.ScopeInstanceSucceededType,
+			Type:               operatorsv1.TypeScoped,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: in.Generation,
-			Reason:             operatorsv1.RoleBindingDeleteFailureReason,
+			Reason:             operatorsv1.ReasonScopingFailed,
 			Message:            fmt.Sprintf("deleting RoleBindings associated with ScopeInstance %q: %v", in.Name, err),
 		})
 		if cErr != nil {
@@ -221,10 +222,10 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	log.Log.Info("No ScopeInstance error")
 
 	cErr := r.updateScopeInstanceCondition(ctx, in, metav1.Condition{
-		Type:               operatorsv1.ScopeInstanceSucceededType,
+		Type:               operatorsv1.TypeScoped,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: st.Generation,
-		Reason:             operatorsv1.ScopeInstanceReconcileSuccessReason,
+		Reason:             operatorsv1.ReasonScopingSuccessful,
 		Message:            fmt.Sprintf("ScopeInstance %q successfully reconciled", in.Name),
 	})
 	if cErr != nil {

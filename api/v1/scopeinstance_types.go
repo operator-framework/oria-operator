@@ -44,12 +44,11 @@ type ScopeInstanceStatus struct {
 
 // TODO(everettraven): Add Condition Types and Reasons as part of the API
 const (
-	ScopeInstanceSucceededType = "Succeeded"
+	TypeScoped = "Scoped"
 
-	ScopeTemplateNotFoundReason         = "ScopeTemplateNotFound"
-	RoleBindingDeleteFailureReason      = "RoleBindingDeleteFailure"
-	RoleBindingCreateFailureReason      = "RoleBindingCreateFailure"
-	ScopeInstanceReconcileSuccessReason = "ScopeInstanceReconcileSuccess"
+	ReasonScopeTemplateNotFound = "ScopeTemplateNotFound"
+	ReasonScopingFailed         = "ScopingFailed"
+	ReasonScopingSuccessful     = "ScopingSuccessful"
 )
 
 //+kubebuilder:object:root=true
