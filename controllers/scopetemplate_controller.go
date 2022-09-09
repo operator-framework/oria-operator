@@ -50,8 +50,8 @@ type ScopeTemplateReconciler struct {
 
 const (
 	// generateNames are used to track each binding we create for a single scopeTemplate
-	clusterRoleGenerateKey            = "operators.coreos.io/generateName"
-	scopeTemplateControllerFieldOwner = "scopetemplate-controller"
+	clusterRoleGenerateKey = "operators.coreos.io/generateName"
+	stCtrlFieldOwner       = "scopetemplate-controller"
 )
 
 //+kubebuilder:rbac:groups=operators.io.operator-framework,resources=scopetemplates,verbs=get;list;watch;create;update;patch;delete
@@ -211,7 +211,11 @@ func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *op
 
 		// server-side apply patch
 		existingCRB.ManagedFields = nil
-		if err := r.Client.Patch(ctx, existingCRB, client.Apply, client.FieldOwner(scopeTemplateControllerFieldOwner), client.ForceOwnership); err != nil {
+		if err := r.Client.Patch(ctx,
+			existingCRB,
+			client.Apply,
+			client.FieldOwner(stCtrlFieldOwner),
+			client.ForceOwnership); err != nil {
 			return err
 		}
 	}

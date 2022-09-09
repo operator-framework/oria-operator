@@ -59,8 +59,7 @@ const (
 
 	// generateNames are used to track each binding we create for a single scopeTemplate
 	clusterRoleBindingGenerateKey = "operators.coreos.io/generateName"
-
-	scopeInstanceControllerFieldOwner = "scopeinstance-controller"
+	siCtrlFieldOwner              = "scopeinstance-controller"
 )
 
 //+kubebuilder:rbac:groups=operators.io.operator-framework,resources=scopeinstances,verbs=get;list;watch;create;update;patch;delete
@@ -219,7 +218,11 @@ func (r *ScopeInstanceReconciler) ensureBindings(ctx context.Context, in *operat
 
 			// server-side apply patch
 			existingCRB.ManagedFields = nil
-			if err := r.Client.Patch(ctx, existingCRB, client.Apply, client.FieldOwner(scopeInstanceControllerFieldOwner), client.ForceOwnership); err != nil {
+			if err := r.Client.Patch(ctx,
+				existingCRB,
+				client.Apply,
+				client.FieldOwner(siCtrlFieldOwner),
+				client.ForceOwnership); err != nil {
 				return err
 			}
 
@@ -293,7 +296,11 @@ func (r *ScopeInstanceReconciler) ensureBindings(ctx context.Context, in *operat
 
 				// server-side apply patch
 				existingRB.ManagedFields = nil
-				if err := r.Client.Patch(ctx, existingRB, client.Apply, client.FieldOwner(scopeInstanceControllerFieldOwner), client.ForceOwnership); err != nil {
+				if err := r.Client.Patch(ctx,
+					existingRB,
+					client.Apply,
+					client.FieldOwner(siCtrlFieldOwner),
+					client.ForceOwnership); err != nil {
 					return err
 				}
 			}
