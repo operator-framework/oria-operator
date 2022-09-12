@@ -451,10 +451,10 @@ func (r *ScopeInstanceReconciler) mapToScopeInstance(obj client.Object) (request
 func (r *ScopeInstanceReconciler) updateScopeInstanceCondition(ctx context.Context, si *operatorsv1.ScopeInstance, condition metav1.Condition) error {
 	// Update the condition of the ScopeInstance
 	meta.SetStatusCondition(&si.Status.Conditions, condition)
-
-	err := r.Status().Update(ctx, si, &client.UpdateOptions{})
-	if err != nil {
-		log.Log.Error(err, "failed to update .Status.Condition of ScopeInstance", "Condition", condition)
-	}
-	return err
+	si.ManagedFields = nil
+	return r.Status().Patch(ctx,
+		si,
+		client.Apply,
+		client.FieldOwner("scopeinstance-controller"),
+		client.ForceOwnership)
 }
