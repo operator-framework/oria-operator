@@ -109,40 +109,41 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	listOption := client.MatchingLabels{
-		scopeInstanceUIDKey: string(in.GetUID()),
+	siHashReq, err := labels.NewRequirement(scopeInstanceHashKey, selection.NotEquals, []string{util.HashObject(in.Spec)})
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
-	requirement, err := labels.NewRequirement(scopeInstanceHashKey, selection.NotEquals, []string{util.HashObject(in.Spec)})
+	siUIDReq, err := labels.NewRequirement(scopeInstanceUIDKey, selection.Equals, []string{string(in.GetUID())})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	listOptions := &client.ListOptions{
-		LabelSelector: labels.NewSelector().Add(*requirement),
+		LabelSelector: labels.NewSelector().Add(*siHashReq, *siUIDReq),
 	}
 
-	if err := r.deleteBindings(ctx, listOption, listOptions); err != nil {
+	if err := r.deleteBindings(ctx, listOptions); err != nil {
 		log.Log.Info("Error in deleting Role Bindings", "error", err)
 		return ctrl.Result{}, err
 	}
 
 	// TODO: Find out how to merge with the above delete
-	listOption = client.MatchingLabels{
-		scopeInstanceUIDKey: string(in.GetUID()),
-		scopeTemplateUIDKey: string(st.GetUID()),
+	stHashReq, err := labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
-	requirement, err = labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
+	stUIDReq, err := labels.NewRequirement(scopeTemplateUIDKey, selection.Equals, []string{string(st.GetUID())})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	listOptions = &client.ListOptions{
-		LabelSelector: labels.NewSelector().Add(*requirement),
+		LabelSelector: labels.NewSelector().Add(*siUIDReq, *stUIDReq, *stHashReq),
 	}
 
-	if err := r.deleteBindings(ctx, listOption, listOptions); err != nil {
+	if err := r.deleteBindings(ctx, listOptions); err != nil {
 		log.Log.Info("Error in deleting Role Bindings", "error", err)
 		return ctrl.Result{}, err
 	}

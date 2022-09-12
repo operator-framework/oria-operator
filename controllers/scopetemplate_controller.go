@@ -83,12 +83,6 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	listOptions := []client.ListOption{
-		&client.MatchingLabels{
-			scopeTemplateUIDKey: string(st.GetUID()),
-		},
-	}
-
 	for _, sInstance := range scopeinstances.Items {
 		if sInstance.Spec.ScopeTemplateName != st.Name {
 			continue
@@ -98,19 +92,26 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if err := r.ensureClusterRoles(ctx, st); err != nil {
 			return ctrl.Result{}, fmt.Errorf("Error in create ClusterRoles: %v", err)
 		}
-
-		// Add requirement to delete old hashes
-		requirement, err := labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		listOptions = append(listOptions, &client.ListOptions{
-			LabelSelector: labels.NewSelector().Add(*requirement),
-		})
 		break
 	}
 
-	if err := r.deleteClusterRoles(ctx, listOptions...); err != nil {
+	// Add requirement to delete old hashes
+	stHashReq, err := labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Only look for old clusterroles that map to this ScopeTemplate UID
+	stUIDReq, err := labels.NewRequirement(scopeTemplateUIDKey, selection.Equals, []string{string(st.GetUID())})
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	listOptions := &client.ListOptions{
+		LabelSelector: labels.NewSelector().Add(*stHashReq, *stUIDReq),
+	}
+
+	if err := r.deleteClusterRoles(ctx, listOptions); err != nil {
 		return ctrl.Result{}, err
 	}
 
