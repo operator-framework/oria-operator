@@ -48,6 +48,13 @@ type ScopeTemplateStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
 
+const (
+	TypeTemplated = "Templated"
+
+	ReasonTemplatingFailed     = "TemplatingFailed"
+	ReasonTemplatingSuccessful = "TemplatingSuccessful"
+)
+
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:resource:scope=Cluster

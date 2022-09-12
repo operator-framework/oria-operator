@@ -82,12 +82,12 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	if err := r.Client.List(ctx, &scopeinstances, &client.ListOptions{}); err != nil {
 		r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
-			Type:               "Succeeded",
+			Type:               operatorsv1.TypeTemplated,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: st.Generation,
 			LastTransitionTime: metav1.Now(),
-			Reason:             "ScopeInstanceListFailure",
-			Message:            fmt.Sprintf("failed to list ScopeInstances: %s", err),
+			Reason:             operatorsv1.ReasonTemplatingFailed,
+			Message:            fmt.Sprintf("listing ScopeInstances: %s", err),
 		})
 
 		return ctrl.Result{}, err
@@ -107,12 +107,12 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		log.Log.Info("ScopeInstance found that references ScopeTemplate", "name", st.Name)
 		if err := r.ensureClusterRoles(ctx, st); err != nil {
 			r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
-				Type:               "Succeeded",
+				Type:               operatorsv1.TypeTemplated,
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: st.Generation,
 				LastTransitionTime: metav1.Now(),
-				Reason:             "ClusterRoleCreateFailure",
-				Message:            fmt.Sprintf("failed to create ClusterRoles: %s", err),
+				Reason:             operatorsv1.ReasonTemplatingFailed,
+				Message:            fmt.Sprintf("creating ClusterRoles: %s", err),
 			})
 			return ctrl.Result{}, fmt.Errorf("Error in create ClusterRoles: %v", err)
 		}
@@ -121,12 +121,12 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		requirement, err := labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
 		if err != nil {
 			r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
-				Type:               "Succeeded",
+				Type:               operatorsv1.TypeTemplated,
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: st.Generation,
 				LastTransitionTime: metav1.Now(),
-				Reason:             "DeleteOldHashRequirementFailure",
-				Message:            fmt.Sprintf("failed to add a requirement to delete old hashes: %s", err),
+				Reason:             operatorsv1.ReasonTemplatingFailed,
+				Message:            fmt.Sprintf("adding a requirement to delete old hashes: %s", err),
 			})
 			return ctrl.Result{}, err
 		}
@@ -138,12 +138,12 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	if err := r.deleteClusterRoles(ctx, listOptions...); err != nil {
 		r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
-			Type:               "Succeeded",
+			Type:               operatorsv1.TypeTemplated,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: st.Generation,
 			LastTransitionTime: metav1.Now(),
-			Reason:             "DeleteClusterRolesFailure",
-			Message:            fmt.Sprintf("failed to delete ClusterRoles: %s", err),
+			Reason:             operatorsv1.ReasonTemplatingFailed,
+			Message:            fmt.Sprintf("deleting ClusterRoles: %s", err),
 		})
 		return ctrl.Result{}, err
 	}
@@ -151,11 +151,11 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	log.Log.Info("No ScopeTemplate error")
 
 	r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
-		Type:               "Succeeded",
+		Type:               operatorsv1.TypeTemplated,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: st.Generation,
 		LastTransitionTime: metav1.Now(),
-		Reason:             "ScopeTemplateReconcileSuccess",
+		Reason:             operatorsv1.ReasonTemplatingSuccessful,
 		Message:            "ScopeTemplate successfully reconciled",
 	})
 
@@ -274,19 +274,9 @@ func (r *ScopeTemplateReconciler) deleteClusterRoles(ctx context.Context, listOp
 	return nil
 }
 
-func (r *ScopeTemplateReconciler) updateScopeTemplateCondition(ctx context.Context, st *operatorsv1.ScopeTemplate, condition metav1.Condition) {
-	// Get the latest instance of the ScopeTemplate in case it has been updated
-	tempSt := &operatorsv1.ScopeTemplate{}
-	err := r.Client.Get(ctx, client.ObjectKeyFromObject(st), tempSt)
-	if err != nil {
-		log.Log.Error(err, "failed to get the latest version of the ScopeTemplate to update the ScopeTemplate status")
-		return
-	}
+func (r *ScopeTemplateReconciler) updateScopeTemplateCondition(ctx context.Context, st *operatorsv1.ScopeTemplate, condition metav1.Condition) error {
 	// Update the condition of the ScopeTemplate
-	meta.SetStatusCondition(&tempSt.Status.Conditions, condition)
-
-	condErr := r.Status().Update(ctx, tempSt, &client.UpdateOptions{})
-	if condErr != nil {
-		log.Log.Error(condErr, "failed to update .Status.Condition of ScopeTemplate", "Condition", condition)
-	}
+	meta.SetStatusCondition(&st.Status.Conditions, condition)
+	st.ManagedFields = nil
+	return r.Status().Patch(ctx, st, client.Apply, client.FieldOwner("scopetemplate-controller"), client.ForceOwnership)
 }
