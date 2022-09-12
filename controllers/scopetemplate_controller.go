@@ -81,7 +81,7 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	scopeinstances := operatorsv1.ScopeInstanceList{}
 
 	if err := r.Client.List(ctx, &scopeinstances, &client.ListOptions{}); err != nil {
-		r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
+		cErr := r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
 			Type:               operatorsv1.TypeTemplated,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: st.Generation,
@@ -89,6 +89,9 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			Reason:             operatorsv1.ReasonTemplatingFailed,
 			Message:            fmt.Sprintf("listing ScopeInstances: %s", err),
 		})
+		if cErr != nil {
+			return ctrl.Result{Requeue: true}, cErr
+		}
 
 		return ctrl.Result{}, err
 	}
@@ -106,7 +109,7 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// create ClusterRoles based on the ScopeTemplate
 		log.Log.Info("ScopeInstance found that references ScopeTemplate", "name", st.Name)
 		if err := r.ensureClusterRoles(ctx, st); err != nil {
-			r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
+			cErr := r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
 				Type:               operatorsv1.TypeTemplated,
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: st.Generation,
@@ -114,13 +117,16 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				Reason:             operatorsv1.ReasonTemplatingFailed,
 				Message:            fmt.Sprintf("creating ClusterRoles: %s", err),
 			})
+			if cErr != nil {
+				return ctrl.Result{Requeue: true}, cErr
+			}
 			return ctrl.Result{}, fmt.Errorf("Error in create ClusterRoles: %v", err)
 		}
 
 		// Add requirement to delete old hashes
 		requirement, err := labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
 		if err != nil {
-			r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
+			cErr := r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
 				Type:               operatorsv1.TypeTemplated,
 				Status:             metav1.ConditionFalse,
 				ObservedGeneration: st.Generation,
@@ -128,6 +134,9 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 				Reason:             operatorsv1.ReasonTemplatingFailed,
 				Message:            fmt.Sprintf("adding a requirement to delete old hashes: %s", err),
 			})
+			if cErr != nil {
+				return ctrl.Result{Requeue: true}, cErr
+			}
 			return ctrl.Result{}, err
 		}
 		listOptions = append(listOptions, &client.ListOptions{
@@ -137,7 +146,7 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	if err := r.deleteClusterRoles(ctx, listOptions...); err != nil {
-		r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
+		cErr := r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
 			Type:               operatorsv1.TypeTemplated,
 			Status:             metav1.ConditionFalse,
 			ObservedGeneration: st.Generation,
@@ -145,12 +154,15 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			Reason:             operatorsv1.ReasonTemplatingFailed,
 			Message:            fmt.Sprintf("deleting ClusterRoles: %s", err),
 		})
+		if cErr != nil {
+			return ctrl.Result{Requeue: true}, cErr
+		}
 		return ctrl.Result{}, err
 	}
 
 	log.Log.Info("No ScopeTemplate error")
 
-	r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
+	cErr := r.updateScopeTemplateCondition(ctx, st, metav1.Condition{
 		Type:               operatorsv1.TypeTemplated,
 		Status:             metav1.ConditionTrue,
 		ObservedGeneration: st.Generation,
@@ -158,6 +170,9 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		Reason:             operatorsv1.ReasonTemplatingSuccessful,
 		Message:            "ScopeTemplate successfully reconciled",
 	})
+	if cErr != nil {
+		return ctrl.Result{Requeue: true}, cErr
+	}
 
 	return ctrl.Result{}, nil
 }
