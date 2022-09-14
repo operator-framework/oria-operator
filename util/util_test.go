@@ -7,7 +7,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	operatorsv1 "awgreene/scope-operator/api/v1"
+	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
 )
 
 var _ = Describe("Util", func() {
@@ -220,7 +220,7 @@ var _ = Describe("Util", func() {
 			}
 
 			hash := HashObject(si.Spec)
-			Expect(hash).Should(Equal("5b568d69c6"))
+			Expect(hash).Should(Equal("577777495c"))
 		})
 		It("should return a hash for an empty string", func() {
 			hash := HashObject("")
