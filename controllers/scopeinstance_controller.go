@@ -465,6 +465,6 @@ func (r *ScopeInstanceReconciler) updateScopeInstanceCondition(ctx context.Conte
 	return r.Status().Patch(ctx,
 		si,
 		client.Apply,
-		client.FieldOwner("scopeinstance-controller"),
+		client.FieldOwner(siCtrlFieldOwner),
 		client.ForceOwnership)
 }
