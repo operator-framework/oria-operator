@@ -21,10 +21,9 @@ import (
 	"fmt"
 	"reflect"
 
-	operatorsv1 "awgreene/scope-operator/api/v1"
+	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
 	"awgreene/scope-operator/util"
 
-	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -45,8 +44,6 @@ import (
 type ScopeInstanceReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-
-	logger *logrus.Logger
 }
 
 const (
@@ -60,6 +57,7 @@ const (
 
 	// generateNames are used to track each binding we create for a single scopeTemplate
 	clusterRoleBindingGenerateKey = "operators.coreos.io/generateName"
+	siCtrlFieldOwner              = "scopeinstance-controller"
 )
 
 //+kubebuilder:rbac:groups=operators.io.operator-framework,resources=scopeinstances,verbs=get;list;watch;create;update;patch;delete
@@ -108,7 +106,6 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 
 		if err := r.deleteBindings(ctx, listOption); err != nil {
-			log.Log.Info("Error in deleting Role Bindings", "error", err)
 			cErr := r.updateScopeInstanceCondition(ctx, in, metav1.Condition{
 				Type:               operatorsv1.TypeScoped,
 				Status:             metav1.ConditionFalse,
@@ -119,6 +116,7 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			if cErr != nil {
 				return ctrl.Result{Requeue: true}, cErr
 			}
+			log.Log.Error(err, "in deleting Role Bindings")
 			return ctrl.Result{}, err
 		}
 
@@ -127,7 +125,6 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// create required roleBindings and clusterRoleBindings.
 	if err := r.ensureBindings(ctx, in, st); err != nil {
-		log.Log.Info("Error in creating Role Bindings", "error", err)
 		cErr := r.updateScopeInstanceCondition(ctx, in, metav1.Condition{
 			Type:               operatorsv1.TypeScoped,
 			Status:             metav1.ConditionFalse,
@@ -138,6 +135,7 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if cErr != nil {
 			return ctrl.Result{Requeue: true}, cErr
 		}
+		log.Log.Error(err, "in creating Role Bindings")
 		return ctrl.Result{}, err
 	}
 
@@ -175,7 +173,7 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if cErr != nil {
 			return ctrl.Result{Requeue: true}, cErr
 		}
-		log.Log.Info("Error in deleting Role Bindings", "error", err)
+		log.Log.Error(err, "in deleting Role Bindings")
 		return ctrl.Result{}, err
 	}
 
@@ -215,7 +213,7 @@ func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		if cErr != nil {
 			return ctrl.Result{Requeue: true}, cErr
 		}
-		log.Log.Info("Error in deleting Role Bindings", "error", err)
+		log.Log.Error(err, "in deleting Role Bindings")
 		return ctrl.Result{}, err
 	}
 
@@ -291,14 +289,20 @@ func (r *ScopeInstanceReconciler) ensureBindings(ctx context.Context, in *operat
 			if util.IsOwnedByLabel(existingCRB.DeepCopy(), in) &&
 				reflect.DeepEqual(existingCRB.Subjects, crb.Subjects) &&
 				reflect.DeepEqual(existingCRB.Labels, crb.Labels) {
-				r.logger.Info("Existing ClusterRoleBinding does not need to be updated")
+				log.Log.Info("existing ClusterRoleBinding does not need to be updated")
 				return nil
 			}
 			existingCRB.Labels = crb.Labels
 			existingCRB.OwnerReferences = crb.OwnerReferences
 			existingCRB.Subjects = crb.Subjects
 
-			if err := r.Client.Update(ctx, existingCRB); err != nil {
+			// server-side apply patch
+			existingCRB.ManagedFields = nil
+			if err := r.Client.Patch(ctx,
+				existingCRB,
+				client.Apply,
+				client.FieldOwner(siCtrlFieldOwner),
+				client.ForceOwnership); err != nil {
 				return err
 			}
 
@@ -363,14 +367,20 @@ func (r *ScopeInstanceReconciler) ensureBindings(ctx context.Context, in *operat
 				if util.IsOwnedByLabel(existingRB.DeepCopy(), in) &&
 					reflect.DeepEqual(existingRB.Subjects, rb.Subjects) &&
 					reflect.DeepEqual(existingRB.Labels, rb.Labels) {
-					r.logger.Info("Existing ClusterRoleBinding does not need to be updated")
+					log.Log.Info("existing ClusterRoleBinding does not need to be updated")
 					return nil
 				}
 				existingRB.Labels = rb.Labels
 				existingRB.OwnerReferences = rb.OwnerReferences
 				existingRB.Subjects = rb.Subjects
 
-				if err := r.Client.Update(ctx, existingRB); err != nil {
+				// server-side apply patch
+				existingRB.ManagedFields = nil
+				if err := r.Client.Patch(ctx,
+					existingRB,
+					client.Apply,
+					client.FieldOwner(siCtrlFieldOwner),
+					client.ForceOwnership); err != nil {
 					return err
 				}
 			}
@@ -429,7 +439,7 @@ func (r *ScopeInstanceReconciler) mapToScopeInstance(obj client.Object) (request
 	scopeInstanceList := &operatorsv1.ScopeInstanceList{}
 
 	if err := r.Client.List(ctx, scopeInstanceList); err != nil {
-		r.logger.Error(err, "error listing scope instances")
+		log.Log.Error(err, "error listing scopeinstances")
 		return nil
 	}
 

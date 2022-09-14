@@ -21,10 +21,9 @@ import (
 	"fmt"
 	"reflect"
 
-	operatorsv1 "awgreene/scope-operator/api/v1"
+	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
 	"awgreene/scope-operator/util"
 
-	"github.com/sirupsen/logrus"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,13 +43,12 @@ import (
 type ScopeTemplateReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-
-	logger *logrus.Logger
 }
 
 const (
 	// generateNames are used to track each binding we create for a single scopeTemplate
 	clusterRoleGenerateKey = "operators.coreos.io/generateName"
+	stCtrlFieldOwner       = "scopetemplate-controller"
 )
 
 //+kubebuilder:rbac:groups=operators.io.operator-framework,resources=scopetemplates,verbs=get;list;watch;create;update;patch;delete
@@ -201,14 +199,20 @@ func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *op
 		if util.IsOwnedByLabel(existingCRB.DeepCopy(), st) &&
 			reflect.DeepEqual(existingCRB.Rules, clusterRole.Rules) &&
 			reflect.DeepEqual(existingCRB.Labels, clusterRole.Labels) {
-			r.logger.Debug("Existing ClusterRoleBinding does not need to be updated")
+			log.Log.Info("existing ClusterRoleBinding does not need to be updated")
 			return nil
 		}
 		existingCRB.Labels = clusterRole.Labels
 		existingCRB.OwnerReferences = clusterRole.OwnerReferences
 		existingCRB.Rules = clusterRole.Rules
 
-		if err := r.Client.Update(ctx, existingCRB); err != nil {
+		// server-side apply patch
+		existingCRB.ManagedFields = nil
+		if err := r.Client.Patch(ctx,
+			existingCRB,
+			client.Apply,
+			client.FieldOwner(stCtrlFieldOwner),
+			client.ForceOwnership); err != nil {
 			return err
 		}
 	}
