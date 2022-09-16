@@ -25,12 +25,17 @@ import (
 	"awgreene/scope-operator/util"
 
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
+	apimacherrors "k8s.io/apimachinery/pkg/util/errors"
+	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
+	rbacv1ac "k8s.io/client-go/applyconfigurations/rbac/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -70,21 +75,39 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	log.Log.Info("Reconciling ScopeTemplate")
 
 	// get the scope template
-	st := &operatorsv1.ScopeTemplate{}
-	if err := r.Client.Get(ctx, req.NamespacedName, st); err != nil {
+	existingSt := &operatorsv1.ScopeTemplate{}
+	if err := r.Client.Get(ctx, req.NamespacedName, existingSt); err != nil {
 		return ctrl.Result{}, err
 	}
 
+	// Perform reconciliation
+	reconciledSt := existingSt.DeepCopy()
+	res, reconcileErr := r.reconcile(ctx, reconciledSt)
+
+	// Update the status subresource before updating the main object. This is
+	// necessary because, in many cases, the main object update will remove the
+	// finalizer, which will cause the core Kubernetes deletion logic to
+	// complete. Therefore, we need to make the status update prior to the main
+	// object update to ensure that the status update can be processed before
+	// a potential deletion.
+	if !equality.Semantic.DeepEqual(existingSt.Status, reconciledSt.Status) {
+		if updateErr := r.Client.Status().Update(ctx, reconciledSt); updateErr != nil {
+			return res, apimacherrors.NewAggregate([]error{reconcileErr, updateErr})
+		}
+	}
+	existingSt.Status, reconciledSt.Status = operatorsv1.ScopeTemplateStatus{}, operatorsv1.ScopeTemplateStatus{}
+	if !equality.Semantic.DeepEqual(existingSt, reconciledSt) {
+		if updateErr := r.Client.Update(ctx, reconciledSt); updateErr != nil {
+			return res, apimacherrors.NewAggregate([]error{reconcileErr, updateErr})
+		}
+	}
+	return res, reconcileErr
+}
+
+func (r *ScopeTemplateReconciler) reconcile(ctx context.Context, st *operatorsv1.ScopeTemplate) (ctrl.Result, error) {
 	scopeinstances := operatorsv1.ScopeInstanceList{}
-
-	if err := r.Client.List(ctx, &scopeinstances, client.InNamespace(st.Namespace)); err != nil {
+	if err := r.Client.List(ctx, &scopeinstances, &client.ListOptions{}); err != nil {
 		return ctrl.Result{}, err
-	}
-
-	listOptions := []client.ListOption{
-		&client.MatchingLabels{
-			scopeTemplateUIDKey: string(st.GetUID()),
-		},
 	}
 
 	for _, sInstance := range scopeinstances.Items {
@@ -94,26 +117,31 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		// create ClusterRoles based on the ScopeTemplate
 		log.Log.Info("ScopeInstance found that references ScopeTemplate", "name", st.Name)
 		if err := r.ensureClusterRoles(ctx, st); err != nil {
-			return ctrl.Result{}, fmt.Errorf("Error in create ClusterRoles: %v", err)
+			return ctrl.Result{}, fmt.Errorf("creating ClusterRoles: %v", err)
 		}
-
-		// Add requirement to delete old hashes
-		requirement, err := labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		listOptions = append(listOptions, &client.ListOptions{
-			LabelSelector: labels.NewSelector().Add(*requirement),
-		})
-		break
 	}
 
-	if err := r.deleteClusterRoles(ctx, listOptions...); err != nil {
+	// Add requirement to delete old hashes
+	stHashReq, err := labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Only look for old clusterroles that map to this ScopeTemplate UID
+	stUIDReq, err := labels.NewRequirement(scopeTemplateUIDKey, selection.Equals, []string{string(st.GetUID())})
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	listOptions := &client.ListOptions{
+		LabelSelector: labels.NewSelector().Add(*stHashReq, *stUIDReq),
+	}
+
+	if err := r.deleteClusterRoles(ctx, listOptions); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	log.Log.Info("No ScopeTemplate error")
-
 	return ctrl.Result{}, nil
 }
 
@@ -147,7 +175,6 @@ func (r *ScopeTemplateReconciler) mapToScopeTemplate(obj client.Object) (request
 	request := reconcile.Request{
 		NamespacedName: types.NamespacedName{Namespace: obj.GetNamespace(), Name: scopeInstance.Spec.ScopeTemplateName},
 	}
-
 	requests = append(requests, request)
 
 	return requests
@@ -155,26 +182,10 @@ func (r *ScopeTemplateReconciler) mapToScopeTemplate(obj client.Object) (request
 
 func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *operatorsv1.ScopeTemplate) error {
 	for _, cr := range st.Spec.ClusterRoles {
-		clusterRole := &rbacv1.ClusterRole{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: cr.GenerateName,
-				OwnerReferences: []metav1.OwnerReference{{
-					APIVersion: st.APIVersion,
-					Kind:       st.Kind,
-					Name:       st.GetObjectMeta().GetName(),
-					UID:        st.GetObjectMeta().GetUID(),
-				}},
-				Labels: map[string]string{
-					scopeTemplateUIDKey:    string(st.GetUID()),
-					scopeTemplateHashKey:   util.HashObject(st.Spec),
-					clusterRoleGenerateKey: cr.GenerateName,
-				},
-			},
-			Rules: cr.Rules,
-		}
+		clusterRole := r.getClusterRole(&cr, st)
 
-		crbList := &rbacv1.ClusterRoleList{}
-		if err := r.Client.List(ctx, crbList, client.MatchingLabels{
+		crList := &rbacv1.ClusterRoleList{}
+		if err := r.Client.List(ctx, crList, client.MatchingLabels{
 			scopeTemplateUIDKey:    string(st.GetUID()),
 			clusterRoleGenerateKey: cr.GenerateName,
 		}); err != nil {
@@ -182,34 +193,39 @@ func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *op
 		}
 
 		// TODO: here to compare the clusterRoles against the expected values.
-		if len(crbList.Items) > 1 {
+		if len(crList.Items) > 1 {
 			return fmt.Errorf("more than one ClusterRole found %s", cr.GenerateName)
 		}
 
 		// GenerateName is immutable, so create the object if it has changed
-		if len(crbList.Items) == 0 {
+		if len(crList.Items) == 0 {
 			if err := r.Client.Create(ctx, clusterRole); err != nil {
 				return err
 			}
 			continue
 		}
 
-		existingCRB := &crbList.Items[0]
+		existingCR := &crList.Items[0]
 
-		if util.IsOwnedByLabel(existingCRB.DeepCopy(), st) &&
-			reflect.DeepEqual(existingCRB.Rules, clusterRole.Rules) &&
-			reflect.DeepEqual(existingCRB.Labels, clusterRole.Labels) {
-			log.Log.Info("existing ClusterRoleBinding does not need to be updated")
+		if util.IsOwnedByLabel(existingCR.DeepCopy(), st) &&
+			reflect.DeepEqual(existingCR.Rules, clusterRole.Rules) &&
+			reflect.DeepEqual(existingCR.Labels, clusterRole.Labels) {
+			log.Log.Info("existing ClusterRole does not need to be updated")
 			return nil
 		}
-		existingCRB.Labels = clusterRole.Labels
-		existingCRB.OwnerReferences = clusterRole.OwnerReferences
-		existingCRB.Rules = clusterRole.Rules
+
+		existingCR.Labels = clusterRole.Labels
+		existingCR.OwnerReferences = clusterRole.OwnerReferences
+		existingCR.Rules = clusterRole.Rules
+
+		u, err := r.patchConfigForClusterRole(existingCR, clusterRole)
+		if err != nil {
+			return err
+		}
 
 		// server-side apply patch
-		existingCRB.ManagedFields = nil
 		if err := r.Client.Patch(ctx,
-			existingCRB,
+			u,
 			client.Apply,
 			client.FieldOwner(stCtrlFieldOwner),
 			client.ForceOwnership); err != nil {
@@ -217,6 +233,32 @@ func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *op
 		}
 	}
 	return nil
+}
+
+func (r *ScopeTemplateReconciler) patchConfigForClusterRole(oldCr *rbacv1.ClusterRole, cr *rbacv1.ClusterRole) (*unstructured.Unstructured, error) {
+	crAc := rbacv1ac.ClusterRole(oldCr.Name).WithLabels(cr.Labels)
+	rulesAc := []rbacv1ac.PolicyRuleApplyConfiguration{}
+	orAcs := []metav1ac.OwnerReferenceApplyConfiguration{}
+
+	for _, rule := range cr.Rules {
+		ruleAc := *rbacv1ac.PolicyRule().WithAPIGroups(rule.APIGroups...).WithNonResourceURLs(rule.NonResourceURLs...).WithResourceNames(rule.ResourceNames...).WithResources(rule.Resources...).WithVerbs(rule.Verbs...)
+		rulesAc = append(rulesAc, ruleAc)
+	}
+
+	for _, own := range cr.OwnerReferences {
+		ownAc := *metav1ac.OwnerReference().WithAPIVersion(own.APIVersion).WithKind(own.Kind).WithName(own.Name).WithUID(own.UID)
+		orAcs = append(orAcs, ownAc)
+	}
+
+	crAc.Rules = rulesAc
+	crAc.OwnerReferences = orAcs
+
+	uMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(crAc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &unstructured.Unstructured{Object: uMap}, nil
 }
 
 func (r *ScopeTemplateReconciler) deleteClusterRoles(ctx context.Context, listOptions ...client.ListOption) error {
@@ -233,4 +275,21 @@ func (r *ScopeTemplateReconciler) deleteClusterRoles(ctx context.Context, listOp
 		}
 	}
 	return nil
+}
+
+func (r *ScopeTemplateReconciler) getClusterRole(crt *operatorsv1.ClusterRoleTemplate, st *operatorsv1.ScopeTemplate) *rbacv1.ClusterRole {
+	cr := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: crt.GenerateName,
+			Labels: map[string]string{
+				scopeTemplateUIDKey:    string(st.GetUID()),
+				scopeTemplateHashKey:   util.HashObject(st.Spec),
+				clusterRoleGenerateKey: crt.GenerateName,
+			},
+		},
+		Rules: crt.Rules,
+	}
+
+	ctrl.SetControllerReference(st, cr, r.Scheme)
+	return cr
 }
