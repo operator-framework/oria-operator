@@ -77,7 +77,7 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// get the scope template
 	existingSt := &operatorsv1.ScopeTemplate{}
 	if err := r.Client.Get(ctx, req.NamespacedName, existingSt); err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// Perform reconciliation
