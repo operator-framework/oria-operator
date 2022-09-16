@@ -214,10 +214,6 @@ func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *op
 			return nil
 		}
 
-		existingCR.Labels = clusterRole.Labels
-		existingCR.OwnerReferences = clusterRole.OwnerReferences
-		existingCR.Rules = clusterRole.Rules
-
 		u, err := r.patchConfigForClusterRole(existingCR, clusterRole)
 		if err != nil {
 			return err
