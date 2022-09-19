@@ -3,9 +3,7 @@ name: oria-operator CI
 on:
   pull_request: {}
   workflow_dispatch: {}
-  push:
-    branches:
-      - "*"
+  push: {}
 
 jobs:
   lint:
