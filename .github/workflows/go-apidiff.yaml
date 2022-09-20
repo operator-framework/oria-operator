@@ -2,8 +2,8 @@ name: go-apidiff
 
 on:
   pull_request: {}
-  workflow_dispatch: {}
-
+  push: {}
+  
 jobs:
   go-apidiff:
     name: go-apidiff
