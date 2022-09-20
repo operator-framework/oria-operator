@@ -1,0 +1,24 @@
+name: go-apidiff
+
+on:
+  pull_request: {}
+  push: {}
+  
+jobs:
+  go-apidiff:
+    name: go-apidiff
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18
+      id: go
+    - name: Print out Go env
+      run: go env
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Run go-apidiff
+      uses: joelanford/go-apidiff@main
