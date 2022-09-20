@@ -1,0 +1,22 @@
+name: verify
+
+on:
+  pull_request: {}
+  workflow_dispatch: {}
+  push: {}
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18
+    - name: Check out code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - name: Verify changes
+      run: make verify
