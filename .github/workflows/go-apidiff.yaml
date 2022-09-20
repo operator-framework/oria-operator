@@ -2,7 +2,6 @@ name: go-apidiff
 
 on:
   pull_request: {}
-  push: {}
   
 jobs:
   go-apidiff:
