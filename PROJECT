@@ -2,7 +2,7 @@ domain: io.operator-framework
 layout:
 - go.kubebuilder.io/v3
 projectName: scope-operator
-repo: awgreene/scope-operator
+repo: operator-frameworke/scope-operator
 resources:
 - api:
     crdVersion: v1alpha1
@@ -11,7 +11,7 @@ resources:
   domain: io.operator-framework
   group: operators
   kind: ScopeInstance
-  path: awgreene/scope-operator/api/v1alpha1
+  path: operator-frameworke/scope-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1alpha1
@@ -20,6 +20,6 @@ resources:
   domain: io.operator-framework
   group: operators
   kind: ScopeTemplate
-  path: awgreene/scope-operator/api/v1alpha1
+  path: operator-frameworke/scope-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

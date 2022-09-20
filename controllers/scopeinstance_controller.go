@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"reflect"
 
-	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
-	"awgreene/scope-operator/util"
+	operatorsv1 "operator-frameworke/scope-operator/api/v1alpha1"
+	"operator-frameworke/scope-operator/util"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"

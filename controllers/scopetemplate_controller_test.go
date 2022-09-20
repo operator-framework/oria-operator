@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
+	operatorsv1 "operator-frameworke/scope-operator/api/v1alpha1"
 )
 
 const (
