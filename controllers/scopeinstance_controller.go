@@ -147,8 +147,11 @@ func (r *ScopeInstanceReconciler) reconcile(ctx context.Context, in *operatorsv1
 	return ctrl.Result{}, nil
 }
 
+// ensureBindings will ensure that the proper bindings are created for a given ScopeInstance and ScopeTemplate.
+// If the ScopeInstance.Spec.Namespaces is empty it will create a ClusterRoleBinding.
+// If the ScopeInstance.Spec.Namespaces is not empty it will create a RoleBinding in each provided namespace.
+// A separate (Cluster)RoleBinding will be created for each ClusterRole specified in the ScopeTemplate
 func (r *ScopeInstanceReconciler) ensureBindings(ctx context.Context, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) error {
-	// it will create clusterrole as shown below if no namespace is provided
 	for _, cr := range st.Spec.ClusterRoles {
 		if len(in.Spec.Namespaces) == 0 {
 			err := r.createOrUpdateClusterRoleBinding(ctx, &cr, in, st)
@@ -359,7 +362,13 @@ func (r *ScopeInstanceReconciler) deleteBindings(ctx context.Context, listOption
 }
 
 // deleteOldBindings will delete any (Cluster)RoleBindings that are owned by the given ScopeInstance and are no longer up to date.
+// Being out of date means that the hash of the ScopeInstance.Spec is different OR the hash of the ScopeTemplate.Spec is different
 func (r *ScopeInstanceReconciler) deleteOldBindings(ctx context.Context, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) error {
+	// TODO: It may be worth looking at combining the hash of the ScopeInstance.Spec and ScopeTemplate.Spec into a single hash to
+	// make it easier to facilitate the OR delete operation since the single hash would different if the ScopeInstance.Spec or
+	// ScopeTemplate.Spec is different than what we are expecting.
+
+	// Delete bindings where the hash of the ScopeInstance.Spec is different
 	siHashReq, err := labels.NewRequirement(scopeInstanceHashKey, selection.NotEquals, []string{util.HashObject(in.Spec)})
 	if err != nil {
 		return err
@@ -378,6 +387,7 @@ func (r *ScopeInstanceReconciler) deleteOldBindings(ctx context.Context, in *ope
 		return err
 	}
 
+	// Delete bindings where the hash of the ScopeTemplate.Spec is different
 	stHashReq, err := labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
 	if err != nil {
 		return err
