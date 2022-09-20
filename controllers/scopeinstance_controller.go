@@ -34,8 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	apimacherrors "k8s.io/apimachinery/pkg/util/errors"
-	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
-	rbacv1ac "k8s.io/client-go/applyconfigurations/rbac/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -202,10 +200,7 @@ func (r *ScopeInstanceReconciler) createOrUpdateClusterRoleBinding(ctx context.C
 		return nil
 	}
 
-	u, err := r.patchConfigForClusterRoleBinding(existingCRB, crb)
-	if err != nil {
-		return err
-	}
+	u := r.patchConfigForClusterRoleBinding(existingCRB, crb)
 
 	// server-side apply patch
 	if err := r.patchBinding(ctx, u); err != nil {
@@ -215,33 +210,19 @@ func (r *ScopeInstanceReconciler) createOrUpdateClusterRoleBinding(ctx context.C
 	return nil
 }
 
-func (r *ScopeInstanceReconciler) patchConfigForClusterRoleBinding(oldCrb *rbacv1.ClusterRoleBinding, crb *rbacv1.ClusterRoleBinding) (*unstructured.Unstructured, error) {
-	crbAc := rbacv1ac.ClusterRoleBinding(oldCrb.Name).WithLabels(crb.Labels)
-	subjAcs := []rbacv1ac.SubjectApplyConfiguration{}
-	orAcs := []metav1ac.OwnerReferenceApplyConfiguration{}
-	for _, sub := range crb.Subjects {
-		subjAc := *rbacv1ac.Subject().WithAPIGroup(sub.APIGroup).WithKind(sub.Kind).WithName(sub.Name)
-		if sub.Namespace != "" {
-			subjAc.Namespace = &sub.Namespace
-		}
-
-		subjAcs = append(subjAcs, subjAc)
+func (r *ScopeInstanceReconciler) patchConfigForClusterRoleBinding(oldCrb *rbacv1.ClusterRoleBinding, crb *rbacv1.ClusterRoleBinding) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": rbacv1.SchemeGroupVersion.String(),
+			"kind":       "ClusterRoleBinding",
+			"metadata": map[string]interface{}{
+				"name":            oldCrb.Name,
+				"ownerReferences": crb.OwnerReferences,
+				"labels":          crb.Labels,
+			},
+			"subjects": crb.Subjects,
+		},
 	}
-	for _, own := range crb.OwnerReferences {
-		ownAc := *metav1ac.OwnerReference().WithAPIVersion(own.APIVersion).WithKind(own.Kind).WithName(own.Name).WithUID(own.UID)
-		orAcs = append(orAcs, ownAc)
-	}
-
-	crbAc.OwnerReferences = orAcs
-	crbAc.Subjects = subjAcs
-	crbAc.RoleRef = rbacv1ac.RoleRef().WithAPIGroup(crb.RoleRef.APIGroup).WithKind(crb.RoleRef.Kind).WithName(crb.RoleRef.Name)
-
-	uMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(crbAc)
-	if err != nil {
-		return nil, err
-	}
-
-	return &unstructured.Unstructured{Object: uMap}, nil
 }
 
 func (r *ScopeInstanceReconciler) createOrUpdateRoleBinding(ctx context.Context, cr *operatorsv1.ClusterRoleTemplate, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate, namespace string) error {
@@ -280,10 +261,7 @@ func (r *ScopeInstanceReconciler) createOrUpdateRoleBinding(ctx context.Context,
 		return nil
 	}
 
-	u, err := r.patchConfigForRoleBinding(existingRB, rb)
-	if err != nil {
-		return err
-	}
+	u := r.patchConfigForRoleBinding(existingRB, rb)
 
 	// server-side apply patch
 	if err := r.patchBinding(ctx, u); err != nil {
@@ -293,33 +271,20 @@ func (r *ScopeInstanceReconciler) createOrUpdateRoleBinding(ctx context.Context,
 	return nil
 }
 
-func (r *ScopeInstanceReconciler) patchConfigForRoleBinding(oldRb *rbacv1.RoleBinding, rb *rbacv1.RoleBinding) (*unstructured.Unstructured, error) {
-	rbAc := rbacv1ac.ClusterRoleBinding(oldRb.Name).WithLabels(rb.Labels)
-	subjAcs := []rbacv1ac.SubjectApplyConfiguration{}
-	orAcs := []metav1ac.OwnerReferenceApplyConfiguration{}
-	for _, sub := range rb.Subjects {
-		subjAc := *rbacv1ac.Subject().WithAPIGroup(sub.APIGroup).WithKind(sub.Kind).WithName(sub.Name)
-		if sub.Namespace != "" {
-			subjAc.Namespace = &sub.Namespace
-		}
-
-		subjAcs = append(subjAcs, subjAc)
+func (r *ScopeInstanceReconciler) patchConfigForRoleBinding(oldRb *rbacv1.RoleBinding, rb *rbacv1.RoleBinding) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": rbacv1.SchemeGroupVersion.String(),
+			"kind":       "RoleBinding",
+			"metadata": map[string]interface{}{
+				"name":            oldRb.Name,
+				"namespace":       oldRb.Namespace,
+				"ownerReferences": rb.OwnerReferences,
+				"labels":          rb.Labels,
+			},
+			"subjects": rb.Subjects,
+		},
 	}
-	for _, own := range rb.OwnerReferences {
-		ownAc := *metav1ac.OwnerReference().WithAPIVersion(own.APIVersion).WithKind(own.Kind).WithName(own.Name).WithUID(own.UID)
-		orAcs = append(orAcs, ownAc)
-	}
-
-	rbAc.OwnerReferences = orAcs
-	rbAc.Subjects = subjAcs
-	rbAc.RoleRef = rbacv1ac.RoleRef().WithAPIGroup(rb.RoleRef.APIGroup).WithKind(rb.RoleRef.Kind).WithName(rb.RoleRef.Name)
-
-	uMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(rbAc)
-	if err != nil {
-		return nil, err
-	}
-
-	return &unstructured.Unstructured{Object: uMap}, nil
 }
 
 func (r *ScopeInstanceReconciler) patchBinding(ctx context.Context, binding client.Object) error {

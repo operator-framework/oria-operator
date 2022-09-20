@@ -34,8 +34,6 @@ import (
 	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	apimacherrors "k8s.io/apimachinery/pkg/util/errors"
-	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
-	rbacv1ac "k8s.io/client-go/applyconfigurations/rbac/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -214,10 +212,7 @@ func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *op
 			return nil
 		}
 
-		u, err := r.patchConfigForClusterRole(existingCR, clusterRole)
-		if err != nil {
-			return err
-		}
+		u := r.patchConfigForClusterRole(existingCR, clusterRole)
 
 		// server-side apply patch
 		if err := r.Client.Patch(ctx,
@@ -231,30 +226,19 @@ func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *op
 	return nil
 }
 
-func (r *ScopeTemplateReconciler) patchConfigForClusterRole(oldCr *rbacv1.ClusterRole, cr *rbacv1.ClusterRole) (*unstructured.Unstructured, error) {
-	crAc := rbacv1ac.ClusterRole(oldCr.Name).WithLabels(cr.Labels)
-	rulesAc := []rbacv1ac.PolicyRuleApplyConfiguration{}
-	orAcs := []metav1ac.OwnerReferenceApplyConfiguration{}
-
-	for _, rule := range cr.Rules {
-		ruleAc := *rbacv1ac.PolicyRule().WithAPIGroups(rule.APIGroups...).WithNonResourceURLs(rule.NonResourceURLs...).WithResourceNames(rule.ResourceNames...).WithResources(rule.Resources...).WithVerbs(rule.Verbs...)
-		rulesAc = append(rulesAc, ruleAc)
+func (r *ScopeTemplateReconciler) patchConfigForClusterRole(oldCr *rbacv1.ClusterRole, cr *rbacv1.ClusterRole) *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": rbacv1.SchemeGroupVersion.String(),
+			"kind":       "ClusterRole",
+			"metadata": map[string]interface{}{
+				"name":            oldCr.Name,
+				"ownerReferences": cr.OwnerReferences,
+				"labels":          cr.Labels,
+			},
+			"rules": cr.Rules,
+		},
 	}
-
-	for _, own := range cr.OwnerReferences {
-		ownAc := *metav1ac.OwnerReference().WithAPIVersion(own.APIVersion).WithKind(own.Kind).WithName(own.Name).WithUID(own.UID)
-		orAcs = append(orAcs, ownAc)
-	}
-
-	crAc.Rules = rulesAc
-	crAc.OwnerReferences = orAcs
-
-	uMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(crAc)
-	if err != nil {
-		return nil, err
-	}
-
-	return &unstructured.Unstructured{Object: uMap}, nil
 }
 
 func (r *ScopeTemplateReconciler) deleteClusterRoles(ctx context.Context, listOptions ...client.ListOption) error {
