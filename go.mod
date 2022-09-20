@@ -6,7 +6,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.19.0
-	github.com/sirupsen/logrus v1.9.0
 	k8s.io/api v0.24.4
 	k8s.io/apimachinery v0.24.4
 	k8s.io/client-go v0.24.4
