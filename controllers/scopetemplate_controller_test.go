@@ -236,7 +236,7 @@ var _ = Describe("ScopeTemplate", func() {
 						verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
 
 						roleBindingList = listRoleBinding(namespace.GetName(), 0, labels)
-
+						Expect(len(roleBindingList.Items)).To(Equal(0))
 					})
 
 					When("a scopeInstance is updated to remove all namespaces", func() {
