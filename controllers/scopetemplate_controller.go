@@ -49,6 +49,12 @@ type ScopeTemplateReconciler struct {
 }
 
 const (
+	// UID keys are used to track "owners" of bindings we create.
+	scopeTemplateUIDKey = "operators.coreos.io/scopeTemplateUID"
+
+	// Hash keys are used to track "abandoned" bindings we created.
+	scopeTemplateHashKey = "operators.coreos.io/scopeTemplateHash"
+
 	// generateNames are used to track each binding we create for a single scopeTemplate
 	clusterRoleGenerateKey = "operators.coreos.io/generateName"
 	stCtrlFieldOwner       = "scopetemplate-controller"

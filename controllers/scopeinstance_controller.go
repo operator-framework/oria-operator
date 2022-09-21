@@ -51,11 +51,9 @@ type ScopeInstanceReconciler struct {
 const (
 	// UID keys are used to track "owners" of bindings we create.
 	scopeInstanceUIDKey = "operators.coreos.io/scopeInstanceUID"
-	scopeTemplateUIDKey = "operators.coreos.io/scopeTemplateUID"
 
 	// Hash keys are used to track "abandoned" bindings we created.
-	scopeInstanceHashKey = "operators.coreos.io/scopeInstanceHash"
-	scopeTemplateHashKey = "operators.coreos.io/scopeTemplateHash"
+	referenceHashKey = "operators.coreos.io/scopeInstanceAndTemplateHash"
 
 	// generateNames are used to track each binding we create for a single scopeTemplate
 	clusterRoleBindingGenerateKey = "operators.coreos.io/generateName"
@@ -175,7 +173,6 @@ func (r *ScopeInstanceReconciler) createOrUpdateClusterRoleBinding(ctx context.C
 	crbList := &rbacv1.ClusterRoleBindingList{}
 	if err := r.Client.List(ctx, crbList, client.MatchingLabels{
 		scopeInstanceUIDKey:           string(in.GetUID()),
-		scopeTemplateUIDKey:           string(st.GetUID()),
 		clusterRoleBindingGenerateKey: cr.GenerateName,
 	}); err != nil {
 		return err
@@ -233,7 +230,6 @@ func (r *ScopeInstanceReconciler) createOrUpdateRoleBinding(ctx context.Context,
 		Namespace: namespace,
 	}, client.MatchingLabels{
 		scopeInstanceUIDKey:           string(in.GetUID()),
-		scopeTemplateUIDKey:           string(st.GetUID()),
 		clusterRoleBindingGenerateKey: cr.GenerateName,
 	}); err != nil {
 		return err
@@ -335,7 +331,8 @@ func (r *ScopeInstanceReconciler) deleteOldBindings(ctx context.Context, in *ope
 	// ScopeTemplate.Spec is different than what we are expecting.
 
 	// Delete bindings where the hash of the ScopeInstance.Spec is different
-	siHashReq, err := labels.NewRequirement(scopeInstanceHashKey, selection.NotEquals, []string{util.HashObject(in.Spec)})
+	combinedHash := util.HashObject(util.HashObject(in.Spec) + util.HashObject(st.Spec))
+	hashReq, err := labels.NewRequirement(referenceHashKey, selection.NotEquals, []string{combinedHash})
 	if err != nil {
 		return err
 	}
@@ -346,26 +343,7 @@ func (r *ScopeInstanceReconciler) deleteOldBindings(ctx context.Context, in *ope
 	}
 
 	listOptions := &client.ListOptions{
-		LabelSelector: labels.NewSelector().Add(*siHashReq, *siUIDReq),
-	}
-
-	if err := r.deleteBindings(ctx, listOptions); err != nil {
-		return err
-	}
-
-	// Delete bindings where the hash of the ScopeTemplate.Spec is different
-	stHashReq, err := labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
-	if err != nil {
-		return err
-	}
-
-	stUIDReq, err := labels.NewRequirement(scopeTemplateUIDKey, selection.Equals, []string{string(st.GetUID())})
-	if err != nil {
-		return err
-	}
-
-	listOptions = &client.ListOptions{
-		LabelSelector: labels.NewSelector().Add(*siUIDReq, *stUIDReq, *stHashReq),
+		LabelSelector: labels.NewSelector().Add(*hashReq, *siUIDReq),
 	}
 
 	if err := r.deleteBindings(ctx, listOptions); err != nil {
@@ -418,9 +396,7 @@ func (r *ScopeInstanceReconciler) getClusterRoleBinding(cr *operatorsv1.ClusterR
 			GenerateName: cr.GenerateName + "-",
 			Labels: map[string]string{
 				scopeInstanceUIDKey:           string(in.GetUID()),
-				scopeTemplateUIDKey:           string(st.GetUID()),
-				scopeInstanceHashKey:          util.HashObject(in.Spec),
-				scopeTemplateHashKey:          util.HashObject(st.Spec),
+				referenceHashKey:              util.HashObject(util.HashObject(in.Spec) + util.HashObject(st.Spec)),
 				clusterRoleBindingGenerateKey: cr.GenerateName,
 			},
 		},
@@ -444,9 +420,7 @@ func (r *ScopeInstanceReconciler) getRoleBinding(cr *operatorsv1.ClusterRoleTemp
 			Namespace:    namespace,
 			Labels: map[string]string{
 				scopeInstanceUIDKey:           string(in.GetUID()),
-				scopeTemplateUIDKey:           string(st.GetUID()),
-				scopeInstanceHashKey:          util.HashObject(in.Spec),
-				scopeTemplateHashKey:          util.HashObject(st.Spec),
+				referenceHashKey:              util.HashObject(util.HashObject(in.Spec) + util.HashObject(st.Spec)),
 				clusterRoleBindingGenerateKey: cr.GenerateName,
 			},
 		},
