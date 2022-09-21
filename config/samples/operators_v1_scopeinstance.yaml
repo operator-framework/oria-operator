@@ -1,4 +1,4 @@
-apiVersion: operators.io.operator-framework/v1
+apiVersion: operators.io.operator-framework/v1alpha1
 kind: ScopeInstance
 metadata:
   name: scopeinstance-sample
