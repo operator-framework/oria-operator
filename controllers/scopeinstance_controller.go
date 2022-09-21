@@ -326,11 +326,6 @@ func (r *ScopeInstanceReconciler) deleteBindings(ctx context.Context, listOption
 // deleteOldBindings will delete any (Cluster)RoleBindings that are owned by the given ScopeInstance and are no longer up to date.
 // Being out of date means that the hash of the ScopeInstance.Spec is different OR the hash of the ScopeTemplate.Spec is different
 func (r *ScopeInstanceReconciler) deleteOldBindings(ctx context.Context, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) error {
-	// TODO: It may be worth looking at combining the hash of the ScopeInstance.Spec and ScopeTemplate.Spec into a single hash to
-	// make it easier to facilitate the OR delete operation since the single hash would different if the ScopeInstance.Spec or
-	// ScopeTemplate.Spec is different than what we are expecting.
-
-	// Delete bindings where the hash of the ScopeInstance.Spec is different
 	combinedHash := util.HashObject(util.HashObject(in.Spec) + util.HashObject(st.Spec))
 	hashReq, err := labels.NewRequirement(referenceHashKey, selection.NotEquals, []string{combinedHash})
 	if err != nil {
