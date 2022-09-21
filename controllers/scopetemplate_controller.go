@@ -164,10 +164,8 @@ func (r *ScopeTemplateReconciler) mapToScopeTemplate(obj client.Object) (request
 		return
 	}
 
-	ctx := context.TODO()
-	//(todo): Check if obj can be converted into a scope instance.
-	scopeInstance := &operatorsv1.ScopeInstance{}
-	if err := r.Client.Get(ctx, types.NamespacedName{Name: obj.GetName()}, scopeInstance); err != nil {
+	scopeInstance, ok := obj.(*operatorsv1.ScopeInstance)
+	if !ok {
 		return nil
 	}
 
