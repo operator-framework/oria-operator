@@ -235,8 +235,12 @@ var _ = Describe("ScopeTemplate", func() {
 
 						verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
 
-						_ = listRoleBinding(namespace.GetName(), 0, labels)
+						labels = map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
+							scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
+							clusterRoleBindingGenerateKey: "test"}
 
+						roleBindingList = listRoleBinding(namespace.GetName(), 0, labels)
+						Expect(len(roleBindingList.Items)).To(Equal(0))
 					})
 
 					When("a scopeInstance is updated to remove all namespaces", func() {
