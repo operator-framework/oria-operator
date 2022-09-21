@@ -277,6 +277,9 @@ func (r *ScopeTemplateReconciler) getClusterRole(crt *operatorsv1.ClusterRoleTem
 		Rules: crt.Rules,
 	}
 
-	ctrl.SetControllerReference(st, cr, r.Scheme)
+	err := ctrl.SetControllerReference(st, cr, r.Scheme)
+	if err != nil {
+		log.Log.Error(err, "setting controller reference for ClusterRoleBinding")
+	}
 	return cr
 }

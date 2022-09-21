@@ -403,7 +403,10 @@ func (r *ScopeInstanceReconciler) getClusterRoleBinding(cr *operatorsv1.ClusterR
 		},
 	}
 
-	ctrl.SetControllerReference(in, crb, r.Scheme)
+	err := ctrl.SetControllerReference(in, crb, r.Scheme)
+	if err != nil {
+		log.Log.Error(err, "setting controller reference for ClusterRoleBinding")
+	}
 	return crb
 }
 
@@ -427,7 +430,9 @@ func (r *ScopeInstanceReconciler) getRoleBinding(cr *operatorsv1.ClusterRoleTemp
 		},
 	}
 
-	ctrl.SetControllerReference(in, rb, r.Scheme)
+	err := ctrl.SetControllerReference(in, rb, r.Scheme)
+	if err != nil {
+		log.Log.Error(err, "setting controller reference for ClusterRoleBinding")
+	}
 	return rb
-
 }
