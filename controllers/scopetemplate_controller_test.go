@@ -25,6 +25,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
@@ -142,10 +143,12 @@ var _ = Describe("ScopeTemplate", func() {
 				//TODO: Non-blocking: Let's create functions to check verify the clusterRole and clusterRoleBindings in a followup PR.
 				Expect(len(existingRole.OwnerReferences)).Should(Equal(1))
 				Expect(existingRole.OwnerReferences).Should(ContainElement(metav1.OwnerReference{
-					APIVersion: "operators.io.operator-framework/v1alpha1",
-					Kind:       "ScopeTemplate",
-					Name:       scopeTemplate.GetName(),
-					UID:        scopeTemplate.GetUID(),
+					APIVersion:         "operators.io.operator-framework/v1alpha1",
+					Kind:               "ScopeTemplate",
+					Name:               scopeTemplate.GetName(),
+					UID:                scopeTemplate.GetUID(),
+					Controller:         pointer.Bool(true),
+					BlockOwnerDeletion: pointer.Bool(true),
 				}))
 				Expect(existingRole.Rules).Should(Equal([]rbacv1.PolicyRule{
 					{
@@ -158,7 +161,6 @@ var _ = Describe("ScopeTemplate", func() {
 
 			It("should create the expected RoleBinding within the test namespace", func() {
 				labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-					scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
 					clusterRoleBindingGenerateKey: "test"}
 
 				roleBindingList := listRoleBinding(namespace.GetName(), 1, labels)
@@ -196,7 +198,6 @@ var _ = Describe("ScopeTemplate", func() {
 					}, timeout, interval).Should(BeNil())
 
 					labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-						scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
 						clusterRoleBindingGenerateKey: "test"}
 
 					roleBindingList := listRoleBinding(namespace2.GetName(), 1, labels)
@@ -226,7 +227,6 @@ var _ = Describe("ScopeTemplate", func() {
 						}, timeout, interval).Should(BeNil())
 
 						labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-							scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
 							clusterRoleBindingGenerateKey: "test"}
 
 						roleBindingList := listRoleBinding(namespace2.GetName(), 1, labels)
@@ -258,7 +258,6 @@ var _ = Describe("ScopeTemplate", func() {
 								err := k8sClient.List(ctx, clusterRoleBindingList,
 									client.MatchingLabels{
 										scopeInstanceUIDKey:           string(scopeInstance.GetUID()),
-										scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
 										clusterRoleBindingGenerateKey: "test",
 									})
 								if err != nil {
@@ -276,10 +275,12 @@ var _ = Describe("ScopeTemplate", func() {
 
 							Expect(len(existingCRB.OwnerReferences)).To(Equal(1))
 							Expect(existingCRB.OwnerReferences).Should(ContainElement(metav1.OwnerReference{
-								APIVersion: "operators.io.operator-framework/v1alpha1",
-								Kind:       "ScopeInstance",
-								Name:       scopeInstance.GetObjectMeta().GetName(),
-								UID:        scopeInstance.GetObjectMeta().GetUID(),
+								APIVersion:         "operators.io.operator-framework/v1alpha1",
+								Kind:               "ScopeInstance",
+								Name:               scopeInstance.GetObjectMeta().GetName(),
+								UID:                scopeInstance.GetObjectMeta().GetUID(),
+								Controller:         pointer.Bool(true),
+								BlockOwnerDeletion: pointer.Bool(true),
 							}))
 
 							Expect(len(existingCRB.Subjects)).To(Equal(1))
@@ -295,7 +296,6 @@ var _ = Describe("ScopeTemplate", func() {
 							}))
 
 							labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-								scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
 								clusterRoleBindingGenerateKey: "test"}
 
 							roleBindingList := listRoleBinding(namespace.GetName(), 0, labels)
@@ -315,10 +315,12 @@ func verifyRoleBindings(existingRB *rbacv1.RoleBinding, si *operatorsv1.ScopeIns
 	// verify cluster role bindings with ownerference, subjects, and role reference.
 	Expect(len(existingRB.OwnerReferences)).To(Equal(1))
 	Expect(existingRB.OwnerReferences).Should(ContainElement(metav1.OwnerReference{
-		APIVersion: "operators.io.operator-framework/v1alpha1",
-		Kind:       "ScopeInstance",
-		Name:       si.GetObjectMeta().GetName(),
-		UID:        si.GetObjectMeta().GetUID(),
+		APIVersion:         "operators.io.operator-framework/v1alpha1",
+		Kind:               "ScopeInstance",
+		Name:               si.GetObjectMeta().GetName(),
+		UID:                si.GetObjectMeta().GetUID(),
+		Controller:         pointer.Bool(true),
+		BlockOwnerDeletion: pointer.Bool(true),
 	}))
 
 	Expect(len(existingRB.Subjects)).To(Equal(1))
