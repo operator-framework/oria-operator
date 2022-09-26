@@ -49,10 +49,10 @@ type ScopeInstanceReconciler struct {
 }
 
 const (
-	// UID keys are used to track "owners" of bindings we create.
+	// scopeInstanceUIDKey is used to track "owners" of bindings we create.
 	scopeInstanceUIDKey = "operators.coreos.io/scopeInstanceUID"
 
-	// Hash keys are used to track "abandoned" bindings we created.
+	// referenceHashKey is used to track "abandoned" bindings we created.
 	referenceHashKey = "operators.coreos.io/scopeInstanceAndTemplateHash"
 
 	// generateNames are used to track each binding we create for a single scopeTemplate
@@ -77,14 +77,13 @@ const (
 func (r *ScopeInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
-	log.Log.Info("Reconciling ScopeInstance", "namespaceName", req.NamespacedName)
+	log.Log.V(2).Info("Reconciling ScopeInstance", "namespaceName", req.NamespacedName)
 
 	existingIn := &operatorsv1.ScopeInstance{}
 	if err := r.Client.Get(ctx, req.NamespacedName, existingIn); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Perform reconciliation
 	reconciledIn := existingIn.DeepCopy()
 	res, reconcileErr := r.reconcile(ctx, reconciledIn)
 
@@ -122,7 +121,7 @@ func (r *ScopeInstanceReconciler) reconcile(ctx context.Context, in *operatorsv1
 		}
 
 		if err := r.deleteBindings(ctx, listOption); err != nil {
-			log.Log.Error(err, "in deleting (Cluster)RoleBindings")
+			log.Log.V(2).Error(err, "in deleting (Cluster)RoleBindings")
 			return ctrl.Result{}, err
 		}
 
@@ -131,13 +130,13 @@ func (r *ScopeInstanceReconciler) reconcile(ctx context.Context, in *operatorsv1
 
 	// create required roleBindings and clusterRoleBindings.
 	if err := r.ensureBindings(ctx, in, st); err != nil {
-		log.Log.Error(err, "in creating RoleBindings")
+		log.Log.V(2).Error(err, "in creating RoleBindings")
 		return ctrl.Result{}, err
 	}
 
 	// delete out of date (Cluster)RoleBindings
 	if err := r.deleteOldBindings(ctx, in, st); err != nil {
-		log.Log.Error(err, "in deleting (Cluster)RoleBindings")
+		log.Log.V(2).Error(err, "in deleting (Cluster)RoleBindings")
 		return ctrl.Result{}, err
 	}
 
@@ -194,7 +193,7 @@ func (r *ScopeInstanceReconciler) createOrUpdateClusterRoleBinding(ctx context.C
 	if util.IsOwnedByLabel(existingCRB.DeepCopy(), in) &&
 		reflect.DeepEqual(existingCRB.Subjects, crb.Subjects) &&
 		reflect.DeepEqual(existingCRB.Labels, crb.Labels) {
-		log.Log.Info("existing ClusterRoleBinding does not need to be updated")
+		log.Log.V(2).Info("existing ClusterRoleBinding does not need to be updated")
 		return nil
 	}
 
@@ -247,14 +246,14 @@ func (r *ScopeInstanceReconciler) createOrUpdateRoleBinding(ctx context.Context,
 		return nil
 	}
 
-	log.Log.Info("Updating existing rb", "namespaced", rbList.Items[0].GetNamespace(), "name", rbList.Items[0].GetName())
+	log.Log.V(2).Info("Updating existing rb", "namespaced", rbList.Items[0].GetNamespace(), "name", rbList.Items[0].GetName())
 
 	existingRB := &rbList.Items[0]
 
 	if util.IsOwnedByLabel(existingRB.DeepCopy(), in) &&
 		reflect.DeepEqual(existingRB.Subjects, rb.Subjects) &&
 		reflect.DeepEqual(existingRB.Labels, rb.Labels) {
-		log.Log.Info("existing RoleBinding does not need to be updated")
+		log.Log.V(2).Info("existing RoleBinding does not need to be updated")
 		return nil
 	}
 
@@ -437,7 +436,7 @@ func (r *ScopeInstanceReconciler) getRoleBinding(cr *operatorsv1.ClusterRoleTemp
 	return rb
 }
 
-// referenchHash is used to store a ScopeInstance.Spec
+// referenceHash is used to store a ScopeInstance.Spec
 // and ScopeTemplate.Spec. This object is used for getting
 // the combined hash of both specs.
 type referenceHash struct {

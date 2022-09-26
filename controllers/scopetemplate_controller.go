@@ -126,13 +126,13 @@ func (r *ScopeTemplateReconciler) reconcile(ctx context.Context, st *operatorsv1
 		}
 	}
 
-	// Add requirement to delete old hashes
+	// Add requirement to delete old (Cluster)Roles
 	stHashReq, err := labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Only look for old clusterroles that map to this ScopeTemplate UID
+	// Only look for old (Cluster)Roles that map to this ScopeTemplate UID
 	stUIDReq, err := labels.NewRequirement(scopeTemplateUIDKey, selection.Equals, []string{string(st.GetUID())})
 	if err != nil {
 		return ctrl.Result{}, err
