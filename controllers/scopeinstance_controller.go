@@ -326,7 +326,7 @@ func (r *ScopeInstanceReconciler) deleteBindings(ctx context.Context, listOption
 // deleteOldBindings will delete any (Cluster)RoleBindings that are owned by the given ScopeInstance and are no longer up to date.
 // Being out of date means that the hash of the ScopeInstance.Spec is different OR the hash of the ScopeTemplate.Spec is different
 func (r *ScopeInstanceReconciler) deleteOldBindings(ctx context.Context, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) error {
-	combinedHash := util.HashObject(util.HashObject(in.Spec) + util.HashObject(st.Spec))
+	combinedHash := hashScopeInstanceAndTemplate(in, st)
 	hashReq, err := labels.NewRequirement(referenceHashKey, selection.NotEquals, []string{combinedHash})
 	if err != nil {
 		return err
@@ -391,7 +391,7 @@ func (r *ScopeInstanceReconciler) getClusterRoleBinding(cr *operatorsv1.ClusterR
 			GenerateName: cr.GenerateName + "-",
 			Labels: map[string]string{
 				scopeInstanceUIDKey:           string(in.GetUID()),
-				referenceHashKey:              util.HashObject(util.HashObject(in.Spec) + util.HashObject(st.Spec)),
+				referenceHashKey:              hashScopeInstanceAndTemplate(in, st),
 				clusterRoleBindingGenerateKey: cr.GenerateName,
 			},
 		},
@@ -418,7 +418,7 @@ func (r *ScopeInstanceReconciler) getRoleBinding(cr *operatorsv1.ClusterRoleTemp
 			Namespace:    namespace,
 			Labels: map[string]string{
 				scopeInstanceUIDKey:           string(in.GetUID()),
-				referenceHashKey:              util.HashObject(util.HashObject(in.Spec) + util.HashObject(st.Spec)),
+				referenceHashKey:              hashScopeInstanceAndTemplate(in, st),
 				clusterRoleBindingGenerateKey: cr.GenerateName,
 			},
 		},
@@ -435,4 +435,23 @@ func (r *ScopeInstanceReconciler) getRoleBinding(cr *operatorsv1.ClusterRoleTemp
 		log.Log.Error(err, "setting controller reference for ClusterRoleBinding")
 	}
 	return rb
+}
+
+// referenchHash is used to store a ScopeInstance.Spec
+// and ScopeTemplate.Spec. This object is used for getting
+// the combined hash of both specs.
+type referenceHash struct {
+	ScopeInstanceSpec *operatorsv1.ScopeInstanceSpec
+	ScopeTemplateSpec *operatorsv1.ScopeTemplateSpec
+}
+
+// hashScopeInstanceAndTemplate will take in a ScopeInstance and ScopeTemplate and return
+// a combined hash of the ScopeInstance.Spec and ScopeTemplate.Spec fields
+func hashScopeInstanceAndTemplate(si *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) string {
+	hashObj := &referenceHash{
+		ScopeInstanceSpec: &si.Spec,
+		ScopeTemplateSpec: &st.Spec,
+	}
+
+	return util.HashObject(hashObj)
 }
