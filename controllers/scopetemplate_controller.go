@@ -212,7 +212,7 @@ func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *op
 		if util.IsOwnedByLabel(existingCR.DeepCopy(), st) &&
 			reflect.DeepEqual(existingCR.Rules, clusterRole.Rules) &&
 			reflect.DeepEqual(existingCR.Labels, clusterRole.Labels) {
-			log.Log.Info("existing ClusterRole does not need to be updated", "UID", existingCR.GetUID())
+			log.Log.V(2).Info("existing ClusterRole does not need to be updated", "UID", existingCR.GetUID())
 			return nil
 		}
 
