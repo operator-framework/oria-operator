@@ -143,10 +143,12 @@ func (r *ScopeInstanceReconciler) reconcile(ctx context.Context, in *operatorsv1
 	return ctrl.Result{}, nil
 }
 
-// ensureBindings will ensure that the proper bindings are created for a given ScopeInstance and ScopeTemplate.
-// If the ScopeInstance.Spec.Namespaces is empty it will create a ClusterRoleBinding.
-// If the ScopeInstance.Spec.Namespaces is not empty it will create a RoleBinding in each provided namespace.
-// A separate (Cluster)RoleBinding will be created for each ClusterRole specified in the ScopeTemplate
+// ensureBindings will ensure that the proper bindings are created for a
+// given ScopeInstance and ScopeTemplate. If the ScopeInstance.Spec.Namespaces
+// is empty it will create a ClusterRoleBinding. If the
+// ScopeInstance.Spec.Namespaces is not empty it will create a RoleBinding
+// in each provided namespace. A separate (Cluster)RoleBinding will be created
+// for each ClusterRole specified in the ScopeTemplate
 func (r *ScopeInstanceReconciler) ensureBindings(ctx context.Context, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) error {
 	for _, cr := range st.Spec.ClusterRoles {
 		if len(in.Spec.Namespaces) == 0 {
@@ -168,7 +170,7 @@ func (r *ScopeInstanceReconciler) ensureBindings(ctx context.Context, in *operat
 }
 
 func (r *ScopeInstanceReconciler) createOrUpdateClusterRoleBinding(ctx context.Context, cr *operatorsv1.ClusterRoleTemplate, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) error {
-	crb := r.getClusterRoleBinding(cr, in, st)
+	crb := r.clusterRoleBindingManifest(cr, in, st)
 	crbList := &rbacv1.ClusterRoleBindingList{}
 	if err := r.Client.List(ctx, crbList, client.MatchingLabels{
 		scopeInstanceUIDKey:           string(in.GetUID()),
@@ -181,7 +183,7 @@ func (r *ScopeInstanceReconciler) createOrUpdateClusterRoleBinding(ctx context.C
 		return fmt.Errorf("more than one ClusterRoleBinding found for ClusterRole %s", cr.GenerateName)
 	}
 
-	// GenerateName is immutable, so create the object if it has changed
+	// Create the ClusterRoleBinding if one doesn't already exist
 	if len(crbList.Items) == 0 {
 		if err := r.Client.Create(ctx, crb); err != nil {
 			return err
@@ -193,21 +195,21 @@ func (r *ScopeInstanceReconciler) createOrUpdateClusterRoleBinding(ctx context.C
 	if util.IsOwnedByLabel(existingCRB.DeepCopy(), in) &&
 		reflect.DeepEqual(existingCRB.Subjects, crb.Subjects) &&
 		reflect.DeepEqual(existingCRB.Labels, crb.Labels) {
-		log.Log.V(2).Info("existing ClusterRoleBinding does not need to be updated")
+		log.Log.V(2).Info("existing ClusterRoleBinding does not need to be updated", "UID", existingCRB.GetUID())
 		return nil
 	}
 
-	u := r.patchConfigForClusterRoleBinding(existingCRB, crb)
+	patchObj := r.clusterRoleBindingPatchObj(existingCRB, crb)
 
 	// server-side apply patch
-	if err := r.patchBinding(ctx, u); err != nil {
+	if err := r.patchBinding(ctx, patchObj); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (r *ScopeInstanceReconciler) patchConfigForClusterRoleBinding(oldCrb *rbacv1.ClusterRoleBinding, crb *rbacv1.ClusterRoleBinding) *unstructured.Unstructured {
+func (r *ScopeInstanceReconciler) clusterRoleBindingPatchObj(oldCrb *rbacv1.ClusterRoleBinding, crb *rbacv1.ClusterRoleBinding) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": rbacv1.SchemeGroupVersion.String(),
@@ -223,7 +225,7 @@ func (r *ScopeInstanceReconciler) patchConfigForClusterRoleBinding(oldCrb *rbacv
 }
 
 func (r *ScopeInstanceReconciler) createOrUpdateRoleBinding(ctx context.Context, cr *operatorsv1.ClusterRoleTemplate, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate, namespace string) error {
-	rb := r.getRoleBinding(cr, in, st, namespace)
+	rb := r.roleBindingManifest(cr, in, st, namespace)
 	rbList := &rbacv1.RoleBindingList{}
 	if err := r.Client.List(ctx, rbList, &client.ListOptions{
 		Namespace: namespace,
@@ -238,7 +240,7 @@ func (r *ScopeInstanceReconciler) createOrUpdateRoleBinding(ctx context.Context,
 		return fmt.Errorf("more than one RoleBinding found for ClusterRole %s", cr.GenerateName)
 	}
 
-	// GenerateName is immutable, so create the object if it has changed
+	// Create the RoleBinding if one doesn't already exist
 	if len(rbList.Items) == 0 {
 		if err := r.Client.Create(ctx, rb); err != nil {
 			return err
@@ -253,21 +255,21 @@ func (r *ScopeInstanceReconciler) createOrUpdateRoleBinding(ctx context.Context,
 	if util.IsOwnedByLabel(existingRB.DeepCopy(), in) &&
 		reflect.DeepEqual(existingRB.Subjects, rb.Subjects) &&
 		reflect.DeepEqual(existingRB.Labels, rb.Labels) {
-		log.Log.V(2).Info("existing RoleBinding does not need to be updated")
+		log.Log.V(2).Info("existing RoleBinding does not need to be updated", "UID", existingRB.GetUID())
 		return nil
 	}
 
-	u := r.patchConfigForRoleBinding(existingRB, rb)
+	patchObj := r.roleBindingPatchObj(existingRB, rb)
 
 	// server-side apply patch
-	if err := r.patchBinding(ctx, u); err != nil {
+	if err := r.patchBinding(ctx, patchObj); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (r *ScopeInstanceReconciler) patchConfigForRoleBinding(oldRb *rbacv1.RoleBinding, rb *rbacv1.RoleBinding) *unstructured.Unstructured {
+func (r *ScopeInstanceReconciler) roleBindingPatchObj(oldRb *rbacv1.RoleBinding, rb *rbacv1.RoleBinding) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": rbacv1.SchemeGroupVersion.String(),
@@ -322,8 +324,9 @@ func (r *ScopeInstanceReconciler) deleteBindings(ctx context.Context, listOption
 	return nil
 }
 
-// deleteOldBindings will delete any (Cluster)RoleBindings that are owned by the given ScopeInstance and are no longer up to date.
-// Being out of date means that the hash of the ScopeInstance.Spec is different OR the hash of the ScopeTemplate.Spec is different
+// deleteOldBindings will delete any (Cluster)RoleBindings that are owned by
+// the given ScopeInstance and are no longer up to date.Being out of date
+// means the combined hash of ScopeInstance.Spec and ScopeTemplate.Spec is different
 func (r *ScopeInstanceReconciler) deleteOldBindings(ctx context.Context, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) error {
 	combinedHash := hashScopeInstanceAndTemplate(in, st)
 	hashReq, err := labels.NewRequirement(referenceHashKey, selection.NotEquals, []string{combinedHash})
@@ -383,8 +386,9 @@ func (r *ScopeInstanceReconciler) mapToScopeInstance(obj client.Object) (request
 	return
 }
 
-// getClusterRoleBindingForClusterRoleTemplate will create a ClusterRoleBinding from a ClusterRoleTemplate, ScopeInstance, and ScopeTemplate
-func (r *ScopeInstanceReconciler) getClusterRoleBinding(cr *operatorsv1.ClusterRoleTemplate, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) *rbacv1.ClusterRoleBinding {
+// clusterRoleBindingManifest will create a ClusterRoleBinding from a
+// ClusterRoleTemplate, ScopeInstance, and ScopeTemplate
+func (r *ScopeInstanceReconciler) clusterRoleBindingManifest(cr *operatorsv1.ClusterRoleTemplate, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) *rbacv1.ClusterRoleBinding {
 	crb := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: cr.GenerateName + "-",
@@ -409,8 +413,9 @@ func (r *ScopeInstanceReconciler) getClusterRoleBinding(cr *operatorsv1.ClusterR
 	return crb
 }
 
-// getRoleBindingForClusterRoleTemplate will create a ClusterRoleBinding from a ClusterRoleTemplate
-func (r *ScopeInstanceReconciler) getRoleBinding(cr *operatorsv1.ClusterRoleTemplate, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate, namespace string) *rbacv1.RoleBinding {
+// roleBindingManifest will create a RoleBinding from a
+// ClusterRoleTemplate, ScopeInstance, ScopeTemplate, and namespace
+func (r *ScopeInstanceReconciler) roleBindingManifest(cr *operatorsv1.ClusterRoleTemplate, in *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate, namespace string) *rbacv1.RoleBinding {
 	rb := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: cr.GenerateName + "-",
@@ -444,8 +449,10 @@ type referenceHash struct {
 	ScopeTemplateSpec *operatorsv1.ScopeTemplateSpec
 }
 
-// hashScopeInstanceAndTemplate will take in a ScopeInstance and ScopeTemplate and return
-// a combined hash of the ScopeInstance.Spec and ScopeTemplate.Spec fields
+// hashScopeInstanceAndTemplate will take in a
+// ScopeInstance and ScopeTemplate and return
+// a combined hash of the ScopeInstance.Spec and
+// ScopeTemplate.Spec fields
 func hashScopeInstanceAndTemplate(si *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) string {
 	hashObj := &referenceHash{
 		ScopeInstanceSpec: &si.Spec,

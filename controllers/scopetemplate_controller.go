@@ -49,10 +49,10 @@ type ScopeTemplateReconciler struct {
 }
 
 const (
-	// UID keys are used to track "owners" of bindings we create.
+	// scopeTemplateUIDKey is used to track "owners" of (Cluster)Roles we create.
 	scopeTemplateUIDKey = "operators.coreos.io/scopeTemplateUID"
 
-	// Hash keys are used to track "abandoned" bindings we created.
+	// scopeTemplateHashKey is used to track "abandoned" (Cluster)Roles we created.
 	scopeTemplateHashKey = "operators.coreos.io/scopeTemplateHash"
 
 	// generateNames are used to track each binding we create for a single scopeTemplate
@@ -85,7 +85,6 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Perform reconciliation
 	reconciledSt := existingSt.DeepCopy()
 	res, reconcileErr := r.reconcile(ctx, reconciledSt)
 
@@ -185,7 +184,7 @@ func (r *ScopeTemplateReconciler) mapToScopeTemplate(obj client.Object) (request
 
 func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *operatorsv1.ScopeTemplate) error {
 	for _, cr := range st.Spec.ClusterRoles {
-		clusterRole := r.getClusterRole(&cr, st)
+		clusterRole := r.clusterRoleManifest(&cr, st)
 
 		crList := &rbacv1.ClusterRoleList{}
 		if err := r.Client.List(ctx, crList, client.MatchingLabels{
@@ -200,7 +199,7 @@ func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *op
 			return fmt.Errorf("more than one ClusterRole found %s", cr.GenerateName)
 		}
 
-		// GenerateName is immutable, so create the object if it has changed
+		// Create the ClusterRole if it does not exist
 		if len(crList.Items) == 0 {
 			if err := r.Client.Create(ctx, clusterRole); err != nil {
 				return err
@@ -213,15 +212,15 @@ func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *op
 		if util.IsOwnedByLabel(existingCR.DeepCopy(), st) &&
 			reflect.DeepEqual(existingCR.Rules, clusterRole.Rules) &&
 			reflect.DeepEqual(existingCR.Labels, clusterRole.Labels) {
-			log.Log.Info("existing ClusterRole does not need to be updated")
+			log.Log.Info("existing ClusterRole does not need to be updated", "UID", existingCR.GetUID())
 			return nil
 		}
 
-		u := r.patchConfigForClusterRole(existingCR, clusterRole)
+		patchObj := r.clusterRolePatchObj(existingCR, clusterRole)
 
 		// server-side apply patch
 		if err := r.Client.Patch(ctx,
-			u,
+			patchObj,
 			client.Apply,
 			client.FieldOwner(stCtrlFieldOwner),
 			client.ForceOwnership); err != nil {
@@ -231,7 +230,7 @@ func (r *ScopeTemplateReconciler) ensureClusterRoles(ctx context.Context, st *op
 	return nil
 }
 
-func (r *ScopeTemplateReconciler) patchConfigForClusterRole(oldCr *rbacv1.ClusterRole, cr *rbacv1.ClusterRole) *unstructured.Unstructured {
+func (r *ScopeTemplateReconciler) clusterRolePatchObj(oldCr *rbacv1.ClusterRole, cr *rbacv1.ClusterRole) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": rbacv1.SchemeGroupVersion.String(),
@@ -262,7 +261,7 @@ func (r *ScopeTemplateReconciler) deleteClusterRoles(ctx context.Context, listOp
 	return nil
 }
 
-func (r *ScopeTemplateReconciler) getClusterRole(crt *operatorsv1.ClusterRoleTemplate, st *operatorsv1.ScopeTemplate) *rbacv1.ClusterRole {
+func (r *ScopeTemplateReconciler) clusterRoleManifest(crt *operatorsv1.ClusterRoleTemplate, st *operatorsv1.ScopeTemplate) *rbacv1.ClusterRole {
 	cr := &rbacv1.ClusterRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: crt.GenerateName,
