@@ -130,7 +130,7 @@ func (r *ScopeInstanceReconciler) reconcile(ctx context.Context, in *operatorsv1
 
 	// create required roleBindings and clusterRoleBindings.
 	if err := r.ensureBindings(ctx, in, st); err != nil {
-		log.Log.V(2).Error(err, "in creating RoleBindings")
+		log.Log.V(2).Error(err, "in creating (Cluster)RoleBindings")
 		return ctrl.Result{}, err
 	}
 
