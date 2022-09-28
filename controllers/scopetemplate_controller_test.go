@@ -28,7 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorsv1 "awgreene/scope-operator/api/v1"
+	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
 )
 
 const (
@@ -64,7 +64,7 @@ var _ = Describe("ScopeTemplate", func() {
 			scopeTemplate = &operatorsv1.ScopeTemplate{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ScopeTemplate",
-					APIVersion: "operators.io.operator-framework/v1",
+					APIVersion: "operators.io.operator-framework/v1alpha1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "scopetemplate-sample",
@@ -120,7 +120,7 @@ var _ = Describe("ScopeTemplate", func() {
 				scopeInstance = &operatorsv1.ScopeInstance{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       "ScopeInstance",
-						APIVersion: "operators.io.operator-framework/v1",
+						APIVersion: "operators.io.operator-framework/v1alpha1",
 					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name: scopeInstanceName,
@@ -149,7 +149,7 @@ var _ = Describe("ScopeTemplate", func() {
 				//TODO: Non-blocking: Let's create functions to check verify the clusterRole and clusterRoleBindings in a followup PR.
 				Expect(len(existingRole.OwnerReferences)).Should(Equal(1))
 				Expect(existingRole.OwnerReferences).Should(ContainElement(metav1.OwnerReference{
-					APIVersion: "operators.io.operator-framework/v1",
+					APIVersion: "operators.io.operator-framework/v1alpha1",
 					Kind:       "ScopeTemplate",
 					Name:       scopeTemplate.GetName(),
 					UID:        scopeTemplate.GetUID(),
@@ -246,7 +246,7 @@ var _ = Describe("ScopeTemplate", func() {
 						verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
 
 						roleBindingList = listRoleBinding(namespace.GetName(), 0, labels)
-						verifyScopeTemplateStatus(scopeTemplate, "Succeeded", "ScopeTemplateReconcileSuccess", metav1.ConditionTrue, "ScopeTemplate successfully reconciled")
+						Expect(len(roleBindingList.Items)).To(Equal(0))
 					})
 
 					When("a scopeInstance is updated to remove all namespaces", func() {
@@ -286,7 +286,7 @@ var _ = Describe("ScopeTemplate", func() {
 
 							Expect(len(existingCRB.OwnerReferences)).To(Equal(1))
 							Expect(existingCRB.OwnerReferences).Should(ContainElement(metav1.OwnerReference{
-								APIVersion: "operators.io.operator-framework/v1",
+								APIVersion: "operators.io.operator-framework/v1alpha1",
 								Kind:       "ScopeInstance",
 								Name:       scopeInstance.GetObjectMeta().GetName(),
 								UID:        scopeInstance.GetObjectMeta().GetUID(),
@@ -326,7 +326,7 @@ func verifyRoleBindings(existingRB *rbacv1.RoleBinding, si *operatorsv1.ScopeIns
 	// verify cluster role bindings with ownerference, subjects, and role reference.
 	Expect(len(existingRB.OwnerReferences)).To(Equal(1))
 	Expect(existingRB.OwnerReferences).Should(ContainElement(metav1.OwnerReference{
-		APIVersion: "operators.io.operator-framework/v1",
+		APIVersion: "operators.io.operator-framework/v1alpha1",
 		Kind:       "ScopeInstance",
 		Name:       si.GetObjectMeta().GetName(),
 		UID:        si.GetObjectMeta().GetUID(),

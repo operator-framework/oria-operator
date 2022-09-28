@@ -1,4 +1,4 @@
-apiVersion: operators.io.operator-framework/v1
+apiVersion: operators.io.operator-framework/v1alpha1
 kind: ScopeTemplate
 metadata:
   name: scopetemplate-sample
@@ -12,6 +12,6 @@ spec:
       resources: ["secrets"]
       verbs: ["get", "watch", "list"]
     subjects:
-    - kind: Group
-      name: manager  # Name is case sensitive
-      apiGroup: rbac.authorization.k8s.io
+    - kind: ServiceAccount
+      name: default  # Name is case sensitive
+      namespace: default

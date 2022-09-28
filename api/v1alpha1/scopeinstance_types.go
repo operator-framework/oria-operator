@@ -14,69 +14,53 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1
+package v1alpha1
 
 import (
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// ScopeTemplateSpec defines the desired state of ScopeTemplate
-type ScopeTemplateSpec struct {
+// ScopeInstanceSpec defines the desired state of ScopeInstance
+type ScopeInstanceSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of ScopeTemplate. Edit scopetemplate_types.go to remove/update
-	ClusterRoles []ClusterRoleTemplate `json:"clusterRoles,omitempty"`
+	// Foo is an example field of ScopeInstance. Edit scopeinstance_types.go to remove/update
+	ScopeTemplateName string   `json:"scopeTemplateName,omitempty"`
+	Namespaces        []string `json:"namespaces,omitempty"`
 }
 
-type ClusterRoleTemplate struct {
-	GenerateName string              `json:"generateName"`
-	Rules        []rbacv1.PolicyRule `json:"rules"`
-	Subjects     []rbacv1.Subject    `json:"subjects"`
-}
-
-// ScopeTemplateStatus defines the observed state of ScopeTemplate
-type ScopeTemplateStatus struct {
+// ScopeInstanceStatus defines the observed state of ScopeInstance
+type ScopeInstanceStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Conditions represent the latest available observations of an object's state
-	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
-
-const (
-	TypeTemplated = "Templated"
-
-	ReasonTemplatingFailed     = "TemplatingFailed"
-	ReasonTemplatingSuccessful = "TemplatingSuccessful"
-)
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 //+kubebuilder:resource:scope=Cluster
 
-// ScopeTemplate is the Schema for the scopetemplates API
-type ScopeTemplate struct {
+// ScopeInstance is the Schema for the scopeinstances API
+type ScopeInstance struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ScopeTemplateSpec   `json:"spec,omitempty"`
-	Status ScopeTemplateStatus `json:"status,omitempty"`
+	Spec   ScopeInstanceSpec   `json:"spec,omitempty"`
+	Status ScopeInstanceStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// ScopeTemplateList contains a list of ScopeTemplate
-type ScopeTemplateList struct {
+// ScopeInstanceList contains a list of ScopeInstance
+type ScopeInstanceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ScopeTemplate `json:"items"`
+	Items           []ScopeInstance `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&ScopeTemplate{}, &ScopeTemplateList{})
+	SchemeBuilder.Register(&ScopeInstance{}, &ScopeInstanceList{})
 }
