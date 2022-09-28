@@ -2,19 +2,17 @@
 
 ## Summary
 
-As part of the Operator Framework’s effort to move towards descoped operators the operator-lifecycle-manager (OLM) must pivot from managing an operator’s Role Based Access Controls (RBAC) to provide tooling that empowers cluster admins and operator authors to control which namespaces an operator reconciles resource events in.
+The Oria Operator provides tooling that allows cluster admins and operator authors to control which namespaces an operator reconciles resource events in.
 
-The `oria-operator` will introduce two cluster scoped CRDs, the `scopeTemplate` and `scopeInstance`.
+The `oria-operator` will introduce two cluster scoped CRDs, the `ScopeTemplate` and `ScopeInstance`.
 
 ### ScopeTemplate CRD
 
 The scopeTemplate CRD is used to define the namespaced RBAC needed by an operator. It basically allows one to define:
 
-- A clusterRole
-- a bindingTemplate, which will be used to create a clusterRoleBinding if the operator is 
-scoped to all namespace OR roleBindings in the set of namespaces.
+- A `ClusterRole`
 
-An example of a scopeTemplate CR can be seen below:
+An example of a `ScopeTemplate` CR can be seen below:
 
 ```
 apiVersion: operators.io.operator-framework/v1
@@ -37,17 +35,17 @@ spec:
 ```
 
 The reconciliation process will verify the below steps:
-1. It will check if any ScopeInstance CRs reference to ScopeTemplate name or not.
-2. If it is referencing then the clusterRole defined in the scopeTemplate will be created if it does not exist. The created clusterRole will include an ownerReference to thes copeTemplate CR.
-3. If no scopeInstance references the scopeTemplate, the clusterRole defined in the scopeTemplate will be deleted if it does not exist.
+1. It will check if any `ScopeInstance` CRs reference to `ScopeTemplate` name or not.
+2. If it is referencing then the `ClusterRole` defined in the `ScopeTemplate` will be created if it does not exist. The created `ClusterRole` will include an owner reference to the `ScopeTemplate` CR.
+3. If no `ScopeInstance` references the `ScopeTemplate`, the `ClusterRole` defined in the `ScopeTemplate` will be deleted if it exists.
 
 
 ### ScopeInstance CRD
 
-The ScopeInstance CRD used to define list of `namespaces` that the RBAC in  ScopeTemplate will be created in. A cluster admin will create the scopeInstance CR and will specify:
+The `ScopeInstance` CRD is used to define a list of `namespaces` that the RBAC in a `ScopeTemplate` will be created in. A cluster admin will create the `ScopeInstance` CR and will specify:
 
-- The name of a scopeTemplate which defines the RBAC required by the operator
-- A set of namespaces that the operator should be scoped to.
+- The name of a `ScopeTemplate` which defines the RBAC required by the operator
+- A set of namespaces that the operator should be scoped to. An empty set of namespaces is equivalent to specifying all namespaces.
 
 ```
 apiVersion: operators.io.operator-framework/v1
@@ -62,49 +60,49 @@ spec:
 
 The reconciliation process will verify the below steps:
 
-1. It will look for ScopeTemplate that ScopeInstance is referencing. if it is not referencing then throw an error with the appropriate message.
-2. If it is referencing and if the `namespaces` array is empty, a single `clusterRoleBinding` will be created. Otherwise, a `roleBinding` will be created in each of the `namespaces`. These resources will include an ownerReference to the ScopeInstance CR.
+1. It will look for `ScopeTemplate` that `ScopeInstance` is referencing. if it is not referencing then throw an error with the appropriate message.
+2. If it is referencing and if the `namespaces` array is empty, a single `ClusterRoleBinding` will be created. Otherwise, a `RoleBinding` will be created in each of the `namespaces`. These resources will include an owner reference to the `ScopeInstance` CR.
 
 ## Run the Operator Locally
 
 ### 1. Run locally outside the cluster 
 
-First, install newly created ScopeInstance and ScopeTemplate CRs
+First, install newly created `ScopeInstance` and `ScopeTemplate` CRs
 
 ```
 make install
 ```
 
-It will create CRDs and throw the below message
+It will create CRDs and log the below message
 
 ```
 customresourcedefinition.apiextensions.k8s.io/scopeinstances.operators.io.operator-framework created
 customresourcedefinition.apiextensions.k8s.io/scopetemplates.operators.io.operator-framework created
 ```
 
-Then, run the `oria-operator` with below command and apply ScopeInstance and ScopeTemplate CRDs
+Then, run the `oria-operator` with below command and apply `ScopeInstance` and `ScopeTemplate` CRDs
 
 ```
 make run
 ```
 
-Apply ScopeTemplate CRD as below. This will create scopetemplate-sample.
+Apply `ScopeTemplate` CRD as below. This will create a `ScopeTemplate` with the name `scopetemplate-sample`.
 
 ```
 $ kubectl apply -f config/samples/operators_v1_scopetemplate.yaml
 scopetemplate.operators.io.operator-framework/scopetemplate-sample created
 ```
 
-Now, create ScopeInstance CRD as below. This will create scopeinstance-sample.
+Now, create `ScopeInstance` CRD as below. This will create a `ScopeInstance` with the name `scopeinstance-sample` that references the `ScopeTemplate` created in the previous step.
 
 ```
 $ kubectl apply -f config/samples/operators_v1_scopeinstance.yaml
 scopeinstance.operators.io.operator-framework/scopeinstance-sample created
 ```
 
-Once scopeinstance-sample is created, it will trigger the reconciliation process of ScopeTemplate and ScopeInstance controllers.
+Once `scopeinstance-sample` is created, it will trigger the reconciliation process of `ScopeTemplate` and `ScopeInstance` controllers.
 
-ScopeTemplate reconciliation process will create ClusterRoles as defined in CRD.
+`ScopeInstance` reconciliation process will create `(Cluster)RoleBinding` as defined in CR.
 
 ```
 $ kubectl get clusterroles
@@ -120,14 +118,14 @@ NAMESPACE   NAME         ROLE               AGE
 default     test-x8hdc   ClusterRole/test   33m
 ```
 
-Now, let's update the scopeinstance with a new namespace. Created `test` namespace.
+Now, let's update the `ScopeInstance` with a new namespace. Create the `test` namespace with:
 
 ```
 $ kubectl create namespace test
 namespace/test created
 ```
 
-ScopeInstance is updated as shown below.
+Update the `ScopeInstance` to look similar to:
 
 ```
 apiVersion: operators.io.operator-framework/v1
@@ -146,8 +144,7 @@ $ kubectl apply -f config/samples/operators_v1_scopeinstance.yaml
 scopeinstance.operators.io.operator-framework/scopeinstance-sample configured
 ```
 
-Now, verify role bindings for those two namespaces.
-
+Now, verify that there is a `RoleBinding` created in both namespaces:
 
 ```
 $ kubectl get rolebindings --all-namespaces
@@ -156,7 +153,7 @@ default     test-x8hdc   ClusterRole/test   37m
 test        test-64hk7   ClusterRole/test   80s
 ```
 
-Now, update the ScopeInstance and remove the `default` namespace from it.
+Now, update the `ScopeInstance` and remove the `default` namespace from it:
 
 ```
 apiVersion: operators.io.operator-framework/v1
@@ -174,14 +171,14 @@ $ kubectl apply -f config/samples/operators_v1_scopeinstance.yaml
 scopeinstance.operators.io.operator-framework/scopeinstance-sample configured
 ```
 
-Verify RoleBindings in all namespaces.
+Verify that the `RoleBinding` in the `default` namespace is removed but the `RoleBinding` in the `test` namespace still exists:
 
 ```
 NAMESPACE   NAME         ROLE               AGE
 test        test-64hk7   ClusterRole/test   2m45s
 ```
 
-In the end, remove all namespaces and check if it can create ClusterRoleBinding and remove rolebindings.
+In the end, remove all namespaces from the `ScopeInstance` and verify that it creates a `ClusterRoleBinding` and removes any associated `RoleBinding`s:
 
 ```
 apiVersion: operators.io.operator-framework/v1
@@ -197,14 +194,14 @@ $ kubectl apply -f config/samples/operators_v1_scopeinstance.yaml
 scopeinstance.operators.io.operator-framework/scopeinstance-sample configured
 ```
 
-Verify ClusterRoleBinding and RoleBindings.
+Verify `RoleBinding`s are removed:
 
 ```
 $ kubectl get rolebindings --all-namespaces 
 No resources found
 ```
 
-ClusterRoleBinding is created as shown below
+Verify `ClusterRoleBinding` is created:
 
 ```
 $ kubectl get clusterrolebindings
@@ -212,41 +209,13 @@ NAME         ROLE               AGE
 test-mskl2   ClusterRole/test   50s
 ```
 
-## Dependency and platform support
-
-### Go version
-
-Release binaries will be built with the Go compiler version specified in the [developer guide][dev-guide-prereqs].
-A Go Operator project's Go version can be found in its `go.mod` file.
-
-[dev-guide-prereqs]:https://sdk.operatorframework.io/docs/contribution-guidelines/developer-guide#prerequisites
-
-### Kubernetes versions
-
-Supported Kubernetes versions for your Operator project or relevant binary can be determined
-by following this [compatibility guide][k8s-compat].
-
-[k8s-compat]:https://sdk.operatorframework.io/docs/overview#kubernetes-version-compatibility
-
-### Platforms
-
-The set of supported platforms for all binaries and images can be found in [these tables][platforms].
-
-[platforms]:https://sdk.operatorframework.io/docs/overview#platform-support
-
-## Community and how to get involved
-
-- [Operator framework community][operator-framework-community]
-- [Communication channels][operator-framework-communication]
-- [Project meetings][operator-framework-meetings]
-
 ## How to contribute
 
-Check out the [contributor documentation][contribution-docs].
+TBD
 
 ## License
 
-Operator SDK is under Apache 2.0 license. See the [LICENSE][license_file] file for details.
+Oria Operator is under Apache 2.0 license. See the [LICENSE][license_file] file for details.
 
 [controller-runtime]: https://github.com/kubernetes-sigs/controller-runtime
 [license_file]:./LICENSE
