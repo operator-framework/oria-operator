@@ -27,6 +27,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -115,6 +116,8 @@ func (r *ScopeInstanceReconciler) reconcile(ctx context.Context, in *operatorsv1
 			return ctrl.Result{}, err
 		}
 
+		updateStatusScopeTemplateNotFound(in, err)
+
 		// Delete anything owned by the scopeInstance if the scopeTemplate is gone.
 		listOption := client.MatchingLabels{
 			scopeInstanceUIDKey: string(in.GetUID()),
@@ -122,6 +125,7 @@ func (r *ScopeInstanceReconciler) reconcile(ctx context.Context, in *operatorsv1
 
 		if err := r.deleteBindings(ctx, listOption); err != nil {
 			log.Log.V(2).Error(err, "in deleting (Cluster)RoleBindings")
+			updateStatusScopingFailed(in, err)
 			return ctrl.Result{}, err
 		}
 
@@ -131,14 +135,18 @@ func (r *ScopeInstanceReconciler) reconcile(ctx context.Context, in *operatorsv1
 	// create required roleBindings and clusterRoleBindings.
 	if err := r.ensureBindings(ctx, in, st); err != nil {
 		log.Log.V(2).Error(err, "in creating (Cluster)RoleBindings")
+		updateStatusScopingFailed(in, err)
 		return ctrl.Result{}, err
 	}
 
 	// delete out of date (Cluster)RoleBindings
 	if err := r.deleteOldBindings(ctx, in, st); err != nil {
 		log.Log.V(2).Error(err, "in deleting (Cluster)RoleBindings")
+		updateStatusScopingFailed(in, err)
 		return ctrl.Result{}, err
 	}
+
+	updateStatusScopingSuccessful(in, fmt.Sprintf("ScopeInstance %q reconciled successfully", in.Name))
 
 	return ctrl.Result{}, nil
 }
@@ -460,4 +468,31 @@ func hashScopeInstanceAndTemplate(si *operatorsv1.ScopeInstance, st *operatorsv1
 	}
 
 	return util.HashObject(hashObj)
+}
+
+func updateStatusScopeTemplateNotFound(in *operatorsv1.ScopeInstance, err error) {
+	meta.SetStatusCondition(&in.Status.Conditions, metav1.Condition{
+		Type:    operatorsv1.TypeScoped,
+		Status:  metav1.ConditionFalse,
+		Reason:  operatorsv1.ReasonScopeTemplateNotFound,
+		Message: fmt.Sprintf("getting ScopeTemplate %q: %s", in.Spec.ScopeTemplateName, err),
+	})
+}
+
+func updateStatusScopingFailed(in *operatorsv1.ScopeInstance, err error) {
+	meta.SetStatusCondition(&in.Status.Conditions, metav1.Condition{
+		Type:    operatorsv1.TypeScoped,
+		Status:  metav1.ConditionFalse,
+		Reason:  operatorsv1.ReasonScopingFailed,
+		Message: err.Error(),
+	})
+}
+
+func updateStatusScopingSuccessful(in *operatorsv1.ScopeInstance, msg string) {
+	meta.SetStatusCondition(&in.Status.Conditions, metav1.Condition{
+		Type:    operatorsv1.TypeScoped,
+		Status:  metav1.ConditionTrue,
+		Reason:  operatorsv1.ReasonScopingSuccessful,
+		Message: msg,
+	})
 }
