@@ -239,9 +239,7 @@ func (r *ScopeInstanceReconciler) createOrUpdateRoleBinding(ctx context.Context,
 
 	// Create the RoleBinding if one doesn't already exist
 	if len(rbList.Items) == 0 {
-		if err := r.Client.Create(ctx, rb); err != nil {
-			return err
-		}
+		return r.Client.Create(ctx, rb)
 		return nil
 	}
 
