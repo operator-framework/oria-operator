@@ -185,10 +185,7 @@ func (r *ScopeInstanceReconciler) createOrUpdateClusterRoleBinding(ctx context.C
 
 	// Create the ClusterRoleBinding if one doesn't already exist
 	if len(crbList.Items) == 0 {
-		if err := r.Client.Create(ctx, crb); err != nil {
-			return err
-		}
-		return nil
+		return r.Client.Create(ctx, crb)
 	}
 
 	existingCRB := &crbList.Items[0]
