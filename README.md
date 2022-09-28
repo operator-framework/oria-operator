@@ -8,7 +8,7 @@ The `oria-operator` will introduce two cluster scoped CRDs, the `ScopeTemplate` 
 
 ### ScopeTemplate CRD
 
-The scopeTemplate CRD is used to define the namespaced RBAC needed by an operator. It basically allows one to define:
+The `ScopeTemplate` CRD is used to define the RBAC needed by an operator. It basically allows one to define:
 
 - A `ClusterRole`
 
@@ -110,7 +110,7 @@ NAME   CREATED AT
 test   2022-09-20T18:39:32Z
 ```
 
-ScopeInstance reconciliation process will create ClusterRoleBinding as defined in CRD.
+`ScopeInstance` reconciliation process will create `(Cluster)RoleBinding`s as defined in CRD.
 
 ```
 $ kubectl get rolebindings --all-namespaces
