@@ -240,7 +240,6 @@ func (r *ScopeInstanceReconciler) createOrUpdateRoleBinding(ctx context.Context,
 	// Create the RoleBinding if one doesn't already exist
 	if len(rbList.Items) == 0 {
 		return r.Client.Create(ctx, rb)
-		return nil
 	}
 
 	log.Log.V(2).Info("Updating existing rb", "namespaced", rbList.Items[0].GetNamespace(), "name", rbList.Items[0].GetName())
