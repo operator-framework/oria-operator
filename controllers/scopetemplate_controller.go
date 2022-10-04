@@ -152,7 +152,6 @@ func (r *ScopeTemplateReconciler) reconcile(ctx context.Context, st *operatorsv1
 	}
 
 	updateStatusTemplatingSuccessful(st, fmt.Sprintf("ScopeTemplate %q successfully reconciled", st.Name))
-
 	log.Log.Info("No ScopeTemplate error")
 	return ctrl.Result{}, nil
 }

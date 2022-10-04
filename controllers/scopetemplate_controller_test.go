@@ -169,7 +169,6 @@ var _ = Describe("ScopeTemplate", func() {
 
 			It("should create the expected RoleBinding within the test namespace", func() {
 				labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-					scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
 					clusterRoleBindingGenerateKey: "test"}
 
 				roleBindingList := listRoleBinding(namespace.GetName(), 1, labels)
@@ -208,7 +207,6 @@ var _ = Describe("ScopeTemplate", func() {
 					}, timeout, interval).Should(BeNil())
 
 					labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-						scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
 						clusterRoleBindingGenerateKey: "test"}
 
 					roleBindingList := listRoleBinding(namespace2.GetName(), 1, labels)
@@ -239,7 +237,6 @@ var _ = Describe("ScopeTemplate", func() {
 						}, timeout, interval).Should(BeNil())
 
 						labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-							scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
 							clusterRoleBindingGenerateKey: "test"}
 
 						roleBindingList := listRoleBinding(namespace2.GetName(), 1, labels)
@@ -271,7 +268,6 @@ var _ = Describe("ScopeTemplate", func() {
 								err := k8sClient.List(ctx, clusterRoleBindingList,
 									client.MatchingLabels{
 										scopeInstanceUIDKey:           string(scopeInstance.GetUID()),
-										scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
 										clusterRoleBindingGenerateKey: "test",
 									})
 								if err != nil {
@@ -310,7 +306,6 @@ var _ = Describe("ScopeTemplate", func() {
 							}))
 
 							labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-								scopeTemplateUIDKey:           string(scopeTemplate.GetUID()),
 								clusterRoleBindingGenerateKey: "test"}
 
 							roleBindingList := listRoleBinding(namespace.GetName(), 0, labels)
