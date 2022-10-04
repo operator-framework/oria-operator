@@ -147,7 +147,6 @@ func (r *ScopeInstanceReconciler) reconcile(ctx context.Context, in *operatorsv1
 	}
 
 	updateStatusScopingSuccessful(in, fmt.Sprintf("ScopeInstance %q reconciled successfully", in.Name))
-
 	return ctrl.Result{}, nil
 }
 
@@ -193,10 +192,7 @@ func (r *ScopeInstanceReconciler) createOrUpdateClusterRoleBinding(ctx context.C
 
 	// Create the ClusterRoleBinding if one doesn't already exist
 	if len(crbList.Items) == 0 {
-		if err := r.Client.Create(ctx, crb); err != nil {
-			return err
-		}
-		return nil
+		return r.Client.Create(ctx, crb)
 	}
 
 	existingCRB := &crbList.Items[0]
@@ -250,10 +246,7 @@ func (r *ScopeInstanceReconciler) createOrUpdateRoleBinding(ctx context.Context,
 
 	// Create the RoleBinding if one doesn't already exist
 	if len(rbList.Items) == 0 {
-		if err := r.Client.Create(ctx, rb); err != nil {
-			return err
-		}
-		return nil
+		return r.Client.Create(ctx, rb)
 	}
 
 	log.Log.V(2).Info("Updating existing rb", "namespaced", rbList.Items[0].GetNamespace(), "name", rbList.Items[0].GetName())
