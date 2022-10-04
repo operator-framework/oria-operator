@@ -44,6 +44,8 @@ var _ = Describe("ScopeTemplate", func() {
 		scopeInstance *operatorsv1.ScopeInstance
 		// Use this to track the test iteration
 		iteration int
+
+		reasonSuccessMsgTemplate = "ScopeTemplate %q successfully reconciled"
 	)
 
 	BeforeEach(func() {
@@ -113,7 +115,11 @@ var _ = Describe("ScopeTemplate", func() {
 
 			clusterRoleList := listClusterRole(0, labels)
 			Expect(clusterRoleList.Items).Should(BeNil())
-			verifyScopeTemplateStatus(scopeTemplate, "Succeeded", "ScopeTemplateReconcileSuccess", metav1.ConditionTrue, "ScopeTemplate successfully reconciled")
+			verifyScopeTemplateStatus(scopeTemplate,
+				operatorsv1.TypeTemplated,
+				operatorsv1.ReasonTemplatingSuccessful,
+				metav1.ConditionTrue,
+				fmt.Sprintf(reasonSuccessMsgTemplate, scopeTemplate.Name))
 		})
 
 		When("a scopeInstance is created that references the scopeTemplate with a single namespace", func() {
@@ -164,19 +170,27 @@ var _ = Describe("ScopeTemplate", func() {
 						Resources: []string{"secrets"},
 					},
 				}))
-				verifyScopeTemplateStatus(scopeTemplate, "Succeeded", "ScopeTemplateReconcileSuccess", metav1.ConditionTrue, "ScopeTemplate successfully reconciled")
+				verifyScopeTemplateStatus(scopeTemplate,
+					operatorsv1.TypeTemplated,
+					operatorsv1.ReasonTemplatingSuccessful,
+					metav1.ConditionTrue,
+					fmt.Sprintf(reasonSuccessMsgTemplate, scopeTemplate.Name))
 			})
 
 			It("should create the expected RoleBinding within the test namespace", func() {
 				labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-					clusterRoleBindingGenerateKey: "test"}
+					clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
 
 				roleBindingList := listRoleBinding(namespace.GetName(), 1, labels)
 
 				existingRB := &roleBindingList.Items[0]
 
 				verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
-				verifyScopeTemplateStatus(scopeTemplate, "Succeeded", "ScopeTemplateReconcileSuccess", metav1.ConditionTrue, "ScopeTemplate successfully reconciled")
+				verifyScopeTemplateStatus(scopeTemplate,
+					operatorsv1.TypeTemplated,
+					operatorsv1.ReasonTemplatingSuccessful,
+					metav1.ConditionTrue,
+					fmt.Sprintf(reasonSuccessMsgTemplate, scopeTemplate.Name))
 			})
 
 			When("a scopeInstance is updated to include another namespace", func() {
@@ -207,7 +221,7 @@ var _ = Describe("ScopeTemplate", func() {
 					}, timeout, interval).Should(BeNil())
 
 					labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-						clusterRoleBindingGenerateKey: "test"}
+						clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
 
 					roleBindingList := listRoleBinding(namespace2.GetName(), 1, labels)
 
@@ -219,7 +233,11 @@ var _ = Describe("ScopeTemplate", func() {
 
 					existingRB = &roleBindingList.Items[0]
 					verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
-					verifyScopeTemplateStatus(scopeTemplate, "Succeeded", "ScopeTemplateReconcileSuccess", metav1.ConditionTrue, "ScopeTemplate successfully reconciled")
+					verifyScopeTemplateStatus(scopeTemplate,
+						operatorsv1.TypeTemplated,
+						operatorsv1.ReasonTemplatingSuccessful,
+						metav1.ConditionTrue,
+						fmt.Sprintf(reasonSuccessMsgTemplate, scopeTemplate.Name))
 				})
 
 				When("a scopeInstance is updated to remove one of the namespace", func() {
@@ -237,7 +255,7 @@ var _ = Describe("ScopeTemplate", func() {
 						}, timeout, interval).Should(BeNil())
 
 						labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-							clusterRoleBindingGenerateKey: "test"}
+							clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
 
 						roleBindingList := listRoleBinding(namespace2.GetName(), 1, labels)
 
@@ -268,7 +286,7 @@ var _ = Describe("ScopeTemplate", func() {
 								err := k8sClient.List(ctx, clusterRoleBindingList,
 									client.MatchingLabels{
 										scopeInstanceUIDKey:           string(scopeInstance.GetUID()),
-										clusterRoleBindingGenerateKey: "test",
+										clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName,
 									})
 								if err != nil {
 									return err
@@ -306,14 +324,18 @@ var _ = Describe("ScopeTemplate", func() {
 							}))
 
 							labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-								clusterRoleBindingGenerateKey: "test"}
+								clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
 
 							roleBindingList := listRoleBinding(namespace.GetName(), 0, labels)
 							Expect(len(roleBindingList.Items)).To(Equal(0))
 
 							roleBindingList = listRoleBinding(namespace2.GetName(), 0, labels)
 							Expect(len(roleBindingList.Items)).To(Equal(0))
-							verifyScopeTemplateStatus(scopeTemplate, "Succeeded", "ScopeTemplateReconcileSuccess", metav1.ConditionTrue, "ScopeTemplate successfully reconciled")
+							verifyScopeTemplateStatus(scopeTemplate,
+								operatorsv1.TypeTemplated,
+								operatorsv1.ReasonTemplatingSuccessful,
+								metav1.ConditionTrue,
+								fmt.Sprintf(reasonSuccessMsgTemplate, scopeTemplate.Name))
 						})
 					})
 				})
@@ -359,7 +381,6 @@ func verifyScopeTemplateStatus(st *operatorsv1.ScopeTemplate, conditionType stri
 
 	cond := meta.FindStatusCondition(tempSt.Status.Conditions, conditionType)
 	Expect(cond).ShouldNot(BeNil())
-	Expect(cond.ObservedGeneration).Should(Equal(tempSt.Generation))
 	Expect(cond.Reason).Should(Equal(reason))
 	Expect(cond.Status).Should(Equal(status))
 	Expect(cond.Message).Should(Equal(message))
