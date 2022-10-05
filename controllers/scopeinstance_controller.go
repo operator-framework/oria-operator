@@ -349,6 +349,8 @@ func (r *ScopeInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&operatorsv1.ScopeInstance{}).
 		Watches(&source.Kind{Type: &operatorsv1.ScopeTemplate{}}, handler.EnqueueRequestsFromMapFunc(r.mapToScopeInstance)).
+		Owns(&rbacv1.ClusterRoleBinding{}).
+		Owns(&rbacv1.RoleBinding{}).
 		Complete(r)
 }
 
