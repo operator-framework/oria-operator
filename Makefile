@@ -165,7 +165,7 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 
 ##@ Release
 export DISABLE_RELEASE_PIPELINE ?= true
-export IMAGE_REPO ?= quay.io/rh_ee_bpalmer/oria-operator
+export IMAGE_REPO ?= quay.io/operator-framework/oria-operator
 export IMAGE_TAG ?= latest
 .PHONY: release
 release: GORELEASER ?= goreleaser
