@@ -32,7 +32,7 @@ git clone https://github.com/operator-framework/oria-operator.git
 Then, run the `oria-operator` with below commands on the root of the directory.
 
 ```
-$ make install run
+make install run
 ```
 
 The above process runs in the foreground. You will need to open a new terminal window/tab to continue with the rest of the tutorial.
@@ -56,7 +56,7 @@ operator-sdk init --domain example.com --repo github.com/example/memcached-opera
 ### Create a new API and Controller 
 
 ```sh
-$ operator-sdk create api --group cache --version v1alpha1 --kind Memcached --resource --controller
+operator-sdk create api --group cache --version v1alpha1 --kind Memcached --resource --controller
 ```
 
 Define the API for the Memcached Custom Resource(CR) by modifying the Go type definitions at `api/v1alpha1/memcached_types.go` to have the following spec and status:
@@ -78,14 +78,7 @@ type MemcachedStatus struct {
 
 ### Now create docker image and push to the dockerhub
 
-Your Makefile composes image tags either from values written at project initialization or from the CLI. In particular, IMAGE_TAG_BASE lets you define a common image registry, namespace, and partial name for all your image tags. Update this to another registry and/or namespace if the current value is incorrect. Afterwards you can update the IMG variable definition like so:
-
-```
--IMG ?= controller:latest
-+IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
-```
-
-Once done, you do not have to set IMG or any other image variable in the CLI. The following command will build and push an operator image tagged as example.com/memcached-operator:v0.0.1 to Docker Hub:
+The following command will build and push an operator image:
 
 ```
 make docker-build docker-push IMG=<registry>/<user>/<img-name>:<version>
@@ -94,7 +87,7 @@ make docker-build docker-push IMG=<registry>/<user>/<img-name>:<version>
 ### Generating CRD manifests 
 
 ```sh
-$ mkdir manifest && \ 
+mkdir manifest && \ 
 kustomize build config/default > manifest/manifest.yaml
 ```
 
@@ -151,7 +144,7 @@ spec:
 Then, apply manifest and look for the pod logs.
 
 ```
-$ kubectl apply -f manifest
+kubectl apply -f manifest
 ```
 
 The `memcached-operator` is running successfully with some errors. 
@@ -159,7 +152,12 @@ The `memcached-operator` is running successfully with some errors.
 Get the list of pods running under `memcached-operator-system` namespace.
 
 ```
-$ kubectl get pods -n memcached-operator-system
+kubectl get pods -n memcached-operator-system
+```
+
+The output should be similar to
+
+```
 NAME                                                     READY   STATUS    RESTARTS   AGE
 memcached-operator-controller-manager-684554467c-4jflr   2/2     Running   0          9m45s
 ```
@@ -167,7 +165,7 @@ memcached-operator-controller-manager-684554467c-4jflr   2/2     Running   0    
 Check the pod logs and now you will be able to see that pod is complaining about `RBAC`.
 
 ```
-$ kubectl logs memcached-operator-controller-manager-684554467c-4jflr manager -n memcached-operator-system
+kubectl logs memcached-operator-controller-manager-684554467c-4jflr manager -n memcached-operator-system
 ```
 
 Create `ScopeInstance` that refers to `ScopeTemplate` and apply it.
@@ -186,10 +184,16 @@ EOF
 The `oria-operator` will create the `ClusterRole` and `ClusterRoleBinding`. Verify `ClusterRole` and `ClusterRoleBinding` with below commands.
 
 ```
-$ kubectl get clusterroles
+kubectl get clusterroles
+```
 
+In the list you should see a ClusterRole with the name `manager-role`
+
+```
 $ kubectl get clusterrolebinding
 ```
+
+In the list you should see a ClusterRoleBinding with the name starts with `manager-role`
 
 Then, the `memcached-operator` will pick these RBACs and now it will stop complaining.
 
