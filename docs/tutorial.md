@@ -44,7 +44,7 @@ Use the [Operator SDK](https://sdk.operatorframework.io/docs/installation/) CLI 
 Create a directory for the memcached operator:
 
 ```
-mkdir -p <directory>
+mkdir -p memcached-operator
 ```
 
 Navigate into the newly created directory and initialize the project with:
@@ -83,6 +83,8 @@ The following command will build and push an operator image:
 ```
 make docker-build docker-push IMG=<registry>/<user>/<img-name>:<version>
 ```
+
+Note:  this tutorial will use the docker image tag `example.com/memcached-operator:v0.0.1` for future steps.  You should replace references to this with the docker tag you pushed as `IMG`, above.
 
 ### Generating CRD manifests 
 
