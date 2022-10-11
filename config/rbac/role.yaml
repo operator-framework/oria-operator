@@ -75,6 +75,7 @@ rules:
   resources:
   - clusterroles
   verbs:
+  - bind
   - create
   - delete
   - escalate

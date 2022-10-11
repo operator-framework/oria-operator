@@ -1,6 +1,7 @@
-
+# Version of the image to use when building/pushing image targets
+VERSION ?= 0.0.1
 # Image URL to use all building/pushing image targets
-IMG ?= quay.io/agreene/oria-operator:latest
+IMG ?= quay.io/operator-framework/oria-operator:v$(VERSION)
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.24.1
