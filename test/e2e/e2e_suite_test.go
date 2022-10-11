@@ -24,18 +24,17 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var (
-	cfg        *rest.Config
-	c          client.Client
-	kubeClient kubernetes.Interface
+	cfg *rest.Config
+	c   client.Client
 )
 
 func TestAPIs(t *testing.T) {
@@ -53,10 +52,9 @@ var _ = BeforeSuite(func() {
 	Expect(err).To(BeNil())
 	err = operatorsv1.AddToScheme(scheme)
 	Expect(err).To(BeNil())
-
-	c, err = client.New(cfg, client.Options{Scheme: scheme})
+	err = corev1.AddToScheme(scheme)
 	Expect(err).To(BeNil())
 
-	kubeClient, err = kubernetes.NewForConfig(cfg)
+	c, err = client.New(cfg, client.Options{Scheme: scheme})
 	Expect(err).To(BeNil())
 })
