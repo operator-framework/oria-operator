@@ -17,5 +17,5 @@ jobs:
       with:
         fetch-depth: 0
     - name: Run e2e tests
-      run: make test-e2e
+      run: make e2e
 
