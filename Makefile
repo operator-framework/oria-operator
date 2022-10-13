@@ -177,4 +177,4 @@ $(KIND): $(LOCALBIN)
 
 ginkgo: $(GINKGO) ## Build a local copy of ginkgo
 $(GINKGO): $(LOCALBIN)
-	GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/v2/ginkgo@latest
+	GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/v2/ginkgo@v2.3.1

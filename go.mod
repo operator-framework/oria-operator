@@ -4,8 +4,8 @@ go 1.18
 
 require (
 	github.com/davecgh/go-spew v1.1.1
-	github.com/onsi/ginkgo/v2 v2.2.0
-	github.com/onsi/gomega v1.21.1
+	github.com/onsi/ginkgo/v2 v2.3.1
+	github.com/onsi/gomega v1.22.0
 	k8s.io/api v0.24.4
 	k8s.io/apimachinery v0.24.4
 	k8s.io/client-go v0.24.4
