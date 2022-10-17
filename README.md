@@ -63,6 +63,22 @@ The reconciliation process will verify the below steps:
 1. It will look for `ScopeTemplate` that `ScopeInstance` is referencing. if it is not referencing then throw an error with the appropriate message.
 2. If it is referencing and if the `namespaces` array is empty, a single `ClusterRoleBinding` will be created. Otherwise, a `RoleBinding` will be created in each of the `namespaces`. These resources will include an owner reference to the `ScopeInstance` CR.
 
+## Installation
+To install the latest release of `oria-operator`, run:
+```
+kubectl apply -f https://github.com/operator-framework/oria-operator/releases/latest/download/oria-operator.yaml
+```
+
+To install a specific release of `oria-operator`, run: 
+```
+ORIA_VERSION=vX.Y.Z; kubectl apply -f https://github.com/operator-framework/oria-operator/releases/download/$ORIA_VERSION/oria-operator.yaml
+```
+
+To install `oria-operator` based on the current `master` branch, run:
+```
+kubectl apply -f https://raw.githubusercontent.com/operator-framework/oria-operator/main/manifests/manifests.yaml
+```
+
 ## Run the Operator Locally
 
 ### 1. Run locally outside the cluster 
