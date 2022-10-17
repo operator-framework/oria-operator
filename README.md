@@ -227,4 +227,3 @@ Oria Operator is under Apache 2.0 license. See the [LICENSE][license_file] file 
 [operator-framework-communication]: https://github.com/operator-framework/community#get-involved
 [operator-framework-meetings]: https://github.com/operator-framework/community#meetings
 [contribution-docs]: https://sdk.operatorframework.io/docs/contribution-guidelines/
-

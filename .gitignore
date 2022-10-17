@@ -15,3 +15,8 @@
 # vendor/
 **/bin/
 .vscode/*
+
+# release files
+.goreleaser.yml
+oria-operator.yaml
+oria-operator
