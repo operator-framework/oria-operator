@@ -2,7 +2,7 @@ domain: io.operator-framework
 layout:
 - go.kubebuilder.io/v3
 projectName: oria-operator
-repo: awgreene/oria-operator
+repo: operator-framework/oria-operator
 resources:
 - api:
     crdVersion: v1alpha1
@@ -11,7 +11,7 @@ resources:
   domain: io.operator-framework
   group: operators
   kind: ScopeInstance
-  path: awgreene/oria-operator/api/v1alpha1
+  path: operator-framework/oria-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1alpha1
@@ -20,6 +20,6 @@ resources:
   domain: io.operator-framework
   group: operators
   kind: ScopeTemplate
-  path: awgreene/oria-operator/api/v1alpha1
+  path: operator-framework/oria-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

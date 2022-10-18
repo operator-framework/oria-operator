@@ -7,7 +7,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	operatorsv1 "awgreene/oria-operator/api/v1alpha1"
+	operatorsv1 "operator-framework/oria-operator/api/v1alpha1"
 )
 
 var _ = Describe("Util", func() {

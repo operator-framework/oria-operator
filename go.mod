@@ -1,4 +1,4 @@
-module awgreene/oria-operator
+module operator-framework/oria-operator
 
 go 1.18
 
