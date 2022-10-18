@@ -1,6 +1,6 @@
 # How to contribute
 
-oria-operator is Apache 2.0 licensed and accepts contributions via GitHub pull requests. This document outlines some of the conventions on commit message formatting, contact points for developers, and other resources to help get contributions into oria-operator.
+`oria-operator` is Apache 2.0 licensed and accepts contributions via GitHub pull requests. This document outlines some of the conventions on commit message formatting, contact points for developers, and other resources to help get contributions into `oria-operator`.
 
 # Email and Chat
 
@@ -17,7 +17,7 @@ oria-operator is Apache 2.0 licensed and accepts contributions via GitHub pull r
 
 Reporting bugs is one of the best ways to contribute. However, a good bug report has some very specific qualities. Please review the following information on reporting bugs and creating issues:
 
-If any part of the oria-operator project has bugs or documentation mistakes, please let us know by opening an issue. We treat bugs and mistakes very seriously and believe no issue is too small. Before creating a bug report, please check that an issue reporting the same problem does not already exist.
+If any part of the `oria-operator` project has bugs or documentation mistakes, please let us know by opening an issue. We treat bugs and mistakes very seriously and believe no issue is too small. Before creating a bug report, please check that an issue reporting the same problem does not already exist.
 
 To make the bug report accurate and easy to understand, please try to create bug reports that are:
 
@@ -25,7 +25,7 @@ To make the bug report accurate and easy to understand, please try to create bug
 
 - Reproducible. Include the steps to reproduce the problem. We understand some issues might be hard to reproduce, please include the steps that might lead to the problem.
 
-- Isolated. Please try to isolate and reproduce the bug with minimum dependencies. It would significantly slow down the speed to fix a bug if too many dependencies are involved in a bug report. Debugging external systems that rely on oria-operator is out of scope, but we are happy to provide guidance in the right direction or help with using oria-operator itself.
+- Isolated. Please try to isolate and reproduce the bug with minimum dependencies. It would significantly slow down the speed to fix a bug if too many dependencies are involved in a bug report. Debugging external systems that rely on `oria-operator` is out of scope, but we are happy to provide guidance in the right direction or help with using `oria-operator` itself.
 
 - Unique. Do not duplicate existing bug report.
 
@@ -50,9 +50,9 @@ Thanks for contributing!
 
 ### Code style
 
-The coding style suggested by the Go community is used in oria-operator. See the [style doc][golang-style-doc] for details.
+The coding style suggested by the Go community is used in `oria-operator`. See the [style doc][golang-style-doc] for details.
 
-Please follow this style to make oria-operator easy to review, maintain and develop.
+Please follow this style to make `oria-operator` easy to review, maintain and develop.
 
 ### Format of the commit message
 
@@ -82,7 +82,7 @@ The first line is the subject and should be no longer than 70 characters, the se
 
 ## Documentation
 
-Most contributions involve some sort of documentation. Currently all documentation resides in the `docs/` folder or a succinct section in the README. When making contributions, it is important to ensure that all documentation is updated as necessary.
+Most contributions involve some sort of documentation. Currently, all documentation resides in the `docs/` folder or a succinct section in the README. When making contributions, it is important to ensure that all documentation is updated as necessary.
 
 If there is a Pull Request with a change that may require a documentation update, a reviewer/maintainer may request that the documentation is updated as part of the Pull Request.
 
