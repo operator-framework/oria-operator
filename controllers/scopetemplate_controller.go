@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"reflect"
 
-	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
-	"awgreene/scope-operator/util"
+	operatorsv1 "awgreene/oria-operator/api/v1alpha1"
+	"awgreene/oria-operator/util"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"

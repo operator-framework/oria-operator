@@ -33,7 +33,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
+	operatorsv1 "awgreene/oria-operator/api/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 

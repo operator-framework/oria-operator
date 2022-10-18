@@ -1,4 +1,4 @@
-module awgreene/scope-operator
+module awgreene/oria-operator
 
 go 1.18
 

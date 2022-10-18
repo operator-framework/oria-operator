@@ -3,7 +3,7 @@ kind: Namespace
 metadata:
   labels:
     control-plane: controller-manager
-  name: scope-operator-system
+  name: oria-operator-system
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -165,14 +165,14 @@ spec:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: scope-operator-controller-manager
-  namespace: scope-operator-system
+  name: oria-operator-controller-manager
+  namespace: oria-operator-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: scope-operator-leader-election-role
-  namespace: scope-operator-system
+  name: oria-operator-leader-election-role
+  namespace: oria-operator-system
 rules:
 - apiGroups:
   - ""
@@ -210,7 +210,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: scope-operator-manager-role
+  name: oria-operator-manager-role
 rules:
 - apiGroups:
   - operators.io.operator-framework
@@ -295,7 +295,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: scope-operator-metrics-reader
+  name: oria-operator-metrics-reader
 rules:
 - nonResourceURLs:
   - /metrics
@@ -305,7 +305,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: scope-operator-proxy-role
+  name: oria-operator-proxy-role
 rules:
 - apiGroups:
   - authentication.k8s.io
@@ -323,42 +323,42 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: scope-operator-leader-election-rolebinding
-  namespace: scope-operator-system
+  name: oria-operator-leader-election-rolebinding
+  namespace: oria-operator-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: scope-operator-leader-election-role
+  name: oria-operator-leader-election-role
 subjects:
 - kind: ServiceAccount
-  name: scope-operator-controller-manager
-  namespace: scope-operator-system
+  name: oria-operator-controller-manager
+  namespace: oria-operator-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: scope-operator-manager-rolebinding
+  name: oria-operator-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: scope-operator-manager-role
+  name: oria-operator-manager-role
 subjects:
 - kind: ServiceAccount
-  name: scope-operator-controller-manager
-  namespace: scope-operator-system
+  name: oria-operator-controller-manager
+  namespace: oria-operator-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: scope-operator-proxy-rolebinding
+  name: oria-operator-proxy-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: scope-operator-proxy-role
+  name: oria-operator-proxy-role
 subjects:
 - kind: ServiceAccount
-  name: scope-operator-controller-manager
-  namespace: scope-operator-system
+  name: oria-operator-controller-manager
+  namespace: oria-operator-system
 ---
 apiVersion: v1
 data:
@@ -386,16 +386,16 @@ data:
     # leaderElectionReleaseOnCancel: true
 kind: ConfigMap
 metadata:
-  name: scope-operator-manager-config
-  namespace: scope-operator-system
+  name: oria-operator-manager-config
+  namespace: oria-operator-system
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
     control-plane: controller-manager
-  name: scope-operator-controller-manager-metrics-service
-  namespace: scope-operator-system
+  name: oria-operator-controller-manager-metrics-service
+  namespace: oria-operator-system
 spec:
   ports:
   - name: https
@@ -410,8 +410,8 @@ kind: Deployment
 metadata:
   labels:
     control-plane: controller-manager
-  name: scope-operator-controller-manager
-  namespace: scope-operator-system
+  name: oria-operator-controller-manager
+  namespace: oria-operator-system
 spec:
   replicas: 1
   selector:
@@ -482,5 +482,5 @@ spec:
             - ALL
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: scope-operator-controller-manager
+      serviceAccountName: oria-operator-controller-manager
       terminationGracePeriodSeconds: 10
