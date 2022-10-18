@@ -62,7 +62,7 @@ tidy: ## Run go mod tidy against code.
 	go mod tidy
 
 .PHONY: verify
-verify: fmt vet tidy generate ## verification checks against code.
+verify: fmt vet tidy generate bundle ## verification checks against code.
 	git diff --exit-code
 
 .PHONY: test
