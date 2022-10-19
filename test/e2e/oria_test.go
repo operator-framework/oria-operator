@@ -157,7 +157,7 @@ func testScenario(description string, namespaces []string, clusterScoped bool) {
 			It("Should have a successful status condition", func() {
 				st := &operatorsv1.ScopeTemplate{}
 				Eventually(func() bool {
-					c.Get(context.Background(), client.ObjectKeyFromObject(scopeTemplate), st)
+					_ = c.Get(context.Background(), client.ObjectKeyFromObject(scopeTemplate), st)
 					return len(st.Status.Conditions) > 0
 				}).Should(BeTrue())
 
@@ -196,7 +196,7 @@ func testScenario(description string, namespaces []string, clusterScoped bool) {
 				It("Should have a failed status condition", func() {
 					si := &operatorsv1.ScopeInstance{}
 					Eventually(func() bool {
-						c.Get(context.Background(), client.ObjectKeyFromObject(scopeInstance), si)
+						_ = c.Get(context.Background(), client.ObjectKeyFromObject(scopeInstance), si)
 						return len(si.Status.Conditions) > 0
 					}).Should(BeTrue())
 
@@ -236,7 +236,7 @@ func testScenario(description string, namespaces []string, clusterScoped bool) {
 				It("Should have a successful status condition", func() {
 					si := &operatorsv1.ScopeInstance{}
 					Eventually(func() bool {
-						c.Get(context.Background(), client.ObjectKeyFromObject(scopeInstance), si)
+						_ = c.Get(context.Background(), client.ObjectKeyFromObject(scopeInstance), si)
 						return len(si.Status.Conditions) > 0
 					}).Should(BeTrue())
 
