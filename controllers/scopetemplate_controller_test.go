@@ -26,7 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 
-	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
+	operatorsv1 "operator-framework/oria-operator/api/v1alpha1"
 )
 
 const (

@@ -29,8 +29,8 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
-	"awgreene/scope-operator/util"
+	operatorsv1 "operator-framework/oria-operator/api/v1alpha1"
+	"operator-framework/oria-operator/util"
 )
 
 var _ = Describe("ScopeInstanceReconciler", func() {
