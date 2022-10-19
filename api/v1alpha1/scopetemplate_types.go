@@ -43,7 +43,17 @@ type ClusterRoleTemplate struct {
 type ScopeTemplateStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Conditions represent the latest available observations of an object's state
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
+
+const (
+	TypeTemplated = "Templated"
+
+	ReasonTemplatingFailed     = "TemplatingFailed"
+	ReasonTemplatingSuccessful = "TemplatingSuccessful"
+)
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status

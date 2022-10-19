@@ -21,12 +21,13 @@ import (
 	"fmt"
 	"reflect"
 
-	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
-	"awgreene/scope-operator/util"
+	operatorsv1 "operator-framework/oria-operator/api/v1alpha1"
+	"operator-framework/oria-operator/util"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	k8sapierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
@@ -111,6 +112,7 @@ func (r *ScopeTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *ScopeTemplateReconciler) reconcile(ctx context.Context, st *operatorsv1.ScopeTemplate) (ctrl.Result, error) {
 	scopeinstances := operatorsv1.ScopeInstanceList{}
 	if err := r.Client.List(ctx, &scopeinstances, &client.ListOptions{}); err != nil {
+		updateStatusTemplatingFailed(st, err)
 		return ctrl.Result{}, err
 	}
 
@@ -121,6 +123,7 @@ func (r *ScopeTemplateReconciler) reconcile(ctx context.Context, st *operatorsv1
 		// create ClusterRoles based on the ScopeTemplate
 		log.Log.Info("ScopeInstance found that references ScopeTemplate", "name", st.Name)
 		if err := r.ensureClusterRoles(ctx, st); err != nil {
+			updateStatusTemplatingFailed(st, err)
 			return ctrl.Result{}, fmt.Errorf("creating ClusterRoles: %v", err)
 		}
 	}
@@ -128,12 +131,14 @@ func (r *ScopeTemplateReconciler) reconcile(ctx context.Context, st *operatorsv1
 	// Add requirement to delete old (Cluster)Roles
 	stHashReq, err := labels.NewRequirement(scopeTemplateHashKey, selection.NotEquals, []string{util.HashObject(st.Spec)})
 	if err != nil {
+		updateStatusTemplatingFailed(st, err)
 		return ctrl.Result{}, err
 	}
 
 	// Only look for old (Cluster)Roles that map to this ScopeTemplate UID
 	stUIDReq, err := labels.NewRequirement(scopeTemplateUIDKey, selection.Equals, []string{string(st.GetUID())})
 	if err != nil {
+		updateStatusTemplatingFailed(st, err)
 		return ctrl.Result{}, err
 	}
 
@@ -142,9 +147,11 @@ func (r *ScopeTemplateReconciler) reconcile(ctx context.Context, st *operatorsv1
 	}
 
 	if err := r.deleteClusterRoles(ctx, listOptions); err != nil {
+		updateStatusTemplatingFailed(st, err)
 		return ctrl.Result{}, err
 	}
 
+	updateStatusTemplatingSuccessful(st, fmt.Sprintf("ScopeTemplate %q successfully reconciled", st.Name))
 	log.Log.Info("No ScopeTemplate error")
 	return ctrl.Result{}, nil
 }
@@ -280,4 +287,22 @@ func (r *ScopeTemplateReconciler) clusterRoleManifest(crt *operatorsv1.ClusterRo
 		log.Log.Error(err, "setting controller reference for ClusterRoleBinding")
 	}
 	return cr
+}
+
+func updateStatusTemplatingFailed(st *operatorsv1.ScopeTemplate, err error) {
+	meta.SetStatusCondition(&st.Status.Conditions, metav1.Condition{
+		Type:    operatorsv1.TypeTemplated,
+		Status:  metav1.ConditionFalse,
+		Reason:  operatorsv1.ReasonTemplatingFailed,
+		Message: err.Error(),
+	})
+}
+
+func updateStatusTemplatingSuccessful(st *operatorsv1.ScopeTemplate, msg string) {
+	meta.SetStatusCondition(&st.Status.Conditions, metav1.Condition{
+		Type:    operatorsv1.TypeTemplated,
+		Status:  metav1.ConditionTrue,
+		Reason:  operatorsv1.ReasonTemplatingSuccessful,
+		Message: msg,
+	})
 }
