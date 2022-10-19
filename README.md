@@ -74,11 +74,6 @@ To install a specific release of `oria-operator`, run:
 ORIA_VERSION=vX.Y.Z; kubectl apply -f https://github.com/operator-framework/oria-operator/releases/download/$ORIA_VERSION/oria-operator.yaml
 ```
 
-To install `oria-operator` based on the current `master` branch, run:
-```
-kubectl apply -f https://raw.githubusercontent.com/operator-framework/oria-operator/main/manifests/manifests.yaml
-```
-
 ## Run the Operator Locally
 
 ### 1. Run locally outside the cluster 
