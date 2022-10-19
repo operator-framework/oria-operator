@@ -62,7 +62,7 @@ tidy: ## Run go mod tidy against code.
 	go mod tidy
 
 .PHONY: verify
-verify: fmt vet tidy generate ## verification checks against code.
+verify: fmt vet tidy generate bundle ## verification checks against code.
 	git diff --exit-code
 
 .PHONY: test
@@ -82,19 +82,25 @@ lint: golangci-lint ## Run golangci-lint linter
 
 .PHONY: build
 build: generate fmt vet ## Build manager binary.
-	go build -o bin/manager main.go
+	go build -o oria-operator main.go
 
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 .PHONY: docker-build
-docker-build: test ## Build docker image with the manager.
+docker-build: test build ## Build docker image with the manager.
 	docker build -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
+
+.PHONY: bundle
+bundle: kustomize
+	mkdir -p manifests
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	$(KUSTOMIZE) build config/default > manifests/manifests.yaml
 
 ##@ Deployment
 
@@ -157,3 +163,21 @@ golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	GOBIN=$(LOCALBIN) go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.0
 
+##@ Release
+export DISABLE_RELEASE_PIPELINE ?= true
+export IMAGE_REPO ?= quay.io/operator-framework/oria-operator
+export IMAGE_TAG ?= latest
+.PHONY: release
+release: GORELEASER ?= goreleaser
+release: GORELEASER_ARGS ?= --snapshot --rm-dist
+release: substitute
+	$(GORELEASER) $(GORELEASER_ARGS)
+
+.PHONY: substitute
+substitute:
+	envsubst < .goreleaser.template.yml > .goreleaser.yml
+
+.PHONY: release-manifests
+release-manifests: RELEASE_VERSION ?= $(shell git describe --abbrev=0 --tags)
+release-manifests: bundle
+	cat manifests/manifests.yaml | sed "s/:v$(VERSION)/:$(RELEASE_VERSION)/g" > oria-operator.yaml
