@@ -10,6 +10,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
@@ -153,7 +154,60 @@ func testScenario(description string, namespaces []string, clusterScoped bool) {
 				Expect(apierrors.IsNotFound(err)).Should(BeTrue())
 			})
 
-			When("Creating a ScopeInstance that references a ScopeTemplate", func() {
+			It("Should have a successful status condition", func() {
+				st := &operatorsv1.ScopeTemplate{}
+				Eventually(func() bool {
+					c.Get(context.Background(), client.ObjectKeyFromObject(scopeTemplate), st)
+					return len(st.Status.Conditions) > 0
+				}).Should(BeTrue())
+
+				cond := meta.FindStatusCondition(st.Status.Conditions, operatorsv1.TypeTemplated)
+				Expect(cond).ShouldNot(BeNil())
+				Expect(cond.Reason).Should(Equal(operatorsv1.ReasonTemplatingSuccessful))
+				Expect(cond.Status).Should(Equal(metav1.ConditionTrue))
+			})
+
+			When("Creating a ScopeInstances that references a nonexistent ScopeTemplate", func() {
+				var scopeInstance *operatorsv1.ScopeInstance
+
+				BeforeEach(func() {
+					scopeInstance = &operatorsv1.ScopeInstance{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: "oria-e2e-scopeinstance-ne",
+						},
+						Spec: operatorsv1.ScopeInstanceSpec{
+							ScopeTemplateName: "nonexistent",
+						},
+					}
+					// If the test scenario is not cluster scoped then
+					// add the namespaces we created to the ScopeInstance
+					if !clusterScoped {
+						for _, namespace := range namespaceList {
+							scopeInstance.Spec.Namespaces = append(scopeInstance.Spec.Namespaces, namespace.Name)
+						}
+					}
+					createResource(scopeInstance)
+				})
+
+				AfterEach(func() {
+					Expect(c.Delete(context.Background(), scopeInstance)).Should(Succeed())
+				})
+
+				It("Should have a failed status condition", func() {
+					si := &operatorsv1.ScopeInstance{}
+					Eventually(func() bool {
+						c.Get(context.Background(), client.ObjectKeyFromObject(scopeInstance), si)
+						return len(si.Status.Conditions) > 0
+					}).Should(BeTrue())
+
+					cond := meta.FindStatusCondition(si.Status.Conditions, operatorsv1.TypeScoped)
+					Expect(cond).ShouldNot(BeNil())
+					Expect(cond.Reason).Should(Equal(operatorsv1.ReasonScopeTemplateNotFound))
+					Expect(cond.Status).Should(Equal(metav1.ConditionFalse))
+				})
+			})
+
+			When("Creating a ScopeInstance that references an existing ScopeTemplate", func() {
 				var scopeInstance *operatorsv1.ScopeInstance
 
 				BeforeEach(func() {
@@ -177,6 +231,19 @@ func testScenario(description string, namespaces []string, clusterScoped bool) {
 
 				AfterEach(func() {
 					Expect(c.Delete(context.Background(), scopeInstance)).Should(Succeed())
+				})
+
+				It("Should have a successful status condition", func() {
+					si := &operatorsv1.ScopeInstance{}
+					Eventually(func() bool {
+						c.Get(context.Background(), client.ObjectKeyFromObject(scopeInstance), si)
+						return len(si.Status.Conditions) > 0
+					}).Should(BeTrue())
+
+					cond := meta.FindStatusCondition(si.Status.Conditions, operatorsv1.TypeScoped)
+					Expect(cond).ShouldNot(BeNil())
+					Expect(cond.Reason).Should(Equal(operatorsv1.ReasonScopingSuccessful))
+					Expect(cond.Status).Should(Equal(metav1.ConditionTrue))
 				})
 
 				It("Should create the ClusterRole defined in the ScopeTemplate", func() {
