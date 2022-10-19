@@ -1,9 +1,9 @@
 package e2e
 
 import (
-	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
 	"context"
 	"fmt"
+	operatorsv1 "operator-framework/oria-operator/api/v1alpha1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

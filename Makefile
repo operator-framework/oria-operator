@@ -70,26 +70,28 @@ verify: fmt vet tidy generate bundle ## verification checks against code.
 
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test ./util ./controllers -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)" go test -short ./... -coverprofile cover.out
 
 .PHONY: test-e2e
-test-e2e: ginkgo ## Run e2e tests.
+test-e2e: KIND_CLUSTER_NAME=oria-e2e
+test-e2e: ginkgo docker-build kind-cluster kind-load-images deploy ## Run e2e tests.
 	$(GINKGO) -trace -progress test ./test/e2e 
-
-e2e: KIND_CLUSTER_NAME=oria-e2e
-e2e: docker-build kind-cluster kind-load-images deploy test-e2e kind-cluster-cleanup ## Run e2e tests against ephemeral KinD cluster
+	$(MAKE) kind-cluster-cleanup KIND_CLUSTER_NAME=oria-e2e
 
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
 	$(GOLANGCI_LINT) run
 
+.PHONY: kind-cluster
 kind-cluster: kind # create a kind cluster
 	$(KIND) create cluster --name ${KIND_CLUSTER_NAME}
 	$(KIND) export kubeconfig --name ${KIND_CLUSTER_NAME}
 
+.PHONY: kind-cluster-cleanup
 kind-cluster-cleanup: kind # delete a kind cluster
 	$(KIND) delete cluster --name ${KIND_CLUSTER_NAME}
 
+.PHONY: kind-load-images
 kind-load-images: kind
 	$(KIND) load docker-image ${IMG} --name ${KIND_CLUSTER_NAME}
 
@@ -104,7 +106,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 .PHONY: docker-build
-docker-build: build ## Build docker image with the manager.
+docker-build: test build ## Build docker image with the manager.
 	docker build -t ${IMG} .
 
 .PHONY: docker-push
@@ -161,31 +163,36 @@ CONTROLLER_TOOLS_VERSION ?= v0.9.0
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 
+.PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE): $(LOCALBIN)
 	test -s $(LOCALBIN)/kustomize || { curl -Ss $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN); }
 
+.PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
 $(CONTROLLER_GEN): $(LOCALBIN)
 	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
 
+.PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
 
+.PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	GOBIN=$(LOCALBIN) go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.0
 
-<<<<<<< HEAD
+.PHONY: kind
 kind: $(KIND)
 $(KIND): $(LOCALBIN)
 	GOBIN=$(LOCALBIN) go install sigs.k8s.io/kind@latest
 
+.PHONY: ginkgo
 ginkgo: $(GINKGO) ## Build a local copy of ginkgo
 $(GINKGO): $(LOCALBIN)
 	GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/v2/ginkgo@v2.3.1
-=======
+
 ##@ Release
 export DISABLE_RELEASE_PIPELINE ?= true
 export IMAGE_REPO ?= quay.io/operator-framework/oria-operator
@@ -204,4 +211,3 @@ substitute:
 release-manifests: RELEASE_VERSION ?= $(shell git describe --abbrev=0 --tags)
 release-manifests: bundle
 	cat manifests/manifests.yaml | sed "s/:v$(VERSION)/:$(RELEASE_VERSION)/g" > oria-operator.yaml
->>>>>>> main

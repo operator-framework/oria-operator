@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	operatorsv1 "awgreene/scope-operator/api/v1alpha1"
+	operatorsv1 "operator-framework/oria-operator/api/v1alpha1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -38,6 +38,10 @@ var (
 )
 
 func TestAPIs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping e2e tests since -short flag was specified")
+	}
+
 	RegisterFailHandler(Fail)
 	SetDefaultEventuallyTimeout(1 * time.Minute)
 	SetDefaultEventuallyPollingInterval(1 * time.Second)
