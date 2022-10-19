@@ -25,6 +25,7 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	operatorsv1 "operator-framework/oria-operator/api/v1alpha1"
 )
@@ -164,3 +165,22 @@ var _ = Describe("ScopeTemplate", func() {
 		})
 	})
 })
+
+func listClusterRole(numberOfExpectedRoleBindings int, labels map[string]string) *rbacv1.ClusterRoleList {
+	clusterRoleList := &rbacv1.ClusterRoleList{}
+	Eventually(func() error {
+		// TODO: scopeTemplate should check for status that no clusterRole exists.
+		// Until then, just make sure no clusterRole exists
+		if err := k8sClient.List(ctx, clusterRoleList, client.MatchingLabels(labels)); err != nil {
+			return err
+		}
+
+		if len(clusterRoleList.Items) != numberOfExpectedRoleBindings {
+			return fmt.Errorf("Expected %d clusterRoles, found %d", numberOfExpectedRoleBindings, len(clusterRoleList.Items))
+		}
+
+		return nil
+	}, timeout, interval).Should(BeNil())
+
+	return clusterRoleList
+}

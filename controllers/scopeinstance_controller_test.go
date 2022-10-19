@@ -435,3 +435,47 @@ var _ = Describe("ScopeInstanceReconciler", func() {
 		})
 	})
 })
+
+func verifyRoleBindings(existingRB *rbacv1.RoleBinding, si *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) {
+	// verify cluster role bindings with ownerference, subjects, and role reference.
+	Expect(len(existingRB.OwnerReferences)).To(Equal(1))
+	Expect(existingRB.OwnerReferences).Should(ContainElement(metav1.OwnerReference{
+		APIVersion:         "operators.io.operator-framework/v1alpha1",
+		Kind:               "ScopeInstance",
+		Name:               si.GetObjectMeta().GetName(),
+		UID:                si.GetObjectMeta().GetUID(),
+		Controller:         pointer.Bool(true),
+		BlockOwnerDeletion: pointer.Bool(true),
+	}))
+
+	Expect(len(existingRB.Subjects)).To(Equal(1))
+	Expect(existingRB.Subjects).Should(ContainElement(rbacv1.Subject{
+		Kind:     "Group",
+		Name:     "manager",
+		APIGroup: "rbac.authorization.k8s.io",
+	}))
+	Expect(existingRB.RoleRef).To(Equal(rbacv1.RoleRef{
+		Kind:     "ClusterRole",
+		Name:     "test",
+		APIGroup: "rbac.authorization.k8s.io",
+	}))
+}
+
+func listRoleBinding(namespace string, numberOfExpectedRoleBindings int, labels map[string]string) *rbacv1.RoleBindingList {
+	roleBindingList := &rbacv1.RoleBindingList{}
+	Eventually(func() error {
+		if err := k8sClient.List(ctx, roleBindingList, &client.ListOptions{
+			Namespace: namespace,
+		}, client.MatchingLabels(labels)); err != nil {
+			return err
+		}
+
+		if len(roleBindingList.Items) != numberOfExpectedRoleBindings {
+			return fmt.Errorf("Expected %d roleBinding, found %d", numberOfExpectedRoleBindings, len(roleBindingList.Items))
+		}
+
+		return nil
+	}, timeout, interval).Should(BeNil())
+
+	return roleBindingList
+}
