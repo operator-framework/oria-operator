@@ -44,7 +44,7 @@ var _ = Describe("ScopeInstanceReconciler", func() {
 			si = &operatorsv1.ScopeInstance{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ScopeInstance",
-					APIVersion: "operators.io.operator-framework/v1",
+					APIVersion: "operators.io.operator-framework/v1alpha1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "scopeinstance-name",
@@ -57,7 +57,7 @@ var _ = Describe("ScopeInstanceReconciler", func() {
 			st = &operatorsv1.ScopeTemplate{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ScopeTemplate",
-					APIVersion: "operators.io.operator-framework/v1",
+					APIVersion: "operators.io.operator-framework/v1alpha1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "scopetemplate-hash",
@@ -139,7 +139,7 @@ var _ = Describe("ScopeInstanceReconciler", func() {
 			scopeTemplate = &operatorsv1.ScopeTemplate{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ScopeTemplate",
-					APIVersion: "operators.io.operator-framework/v1",
+					APIVersion: "operators.io.operator-framework/v1alpha1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "scopetemplate-test",
@@ -177,7 +177,7 @@ var _ = Describe("ScopeInstanceReconciler", func() {
 			scopeInstance = &operatorsv1.ScopeInstance{
 				TypeMeta: metav1.TypeMeta{
 					Kind:       "ScopeInstance",
-					APIVersion: "operators.io.operator-framework/v1",
+					APIVersion: "operators.io.operator-framework/v1alpha1",
 				},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "scopeinstance-test",
@@ -217,17 +217,19 @@ var _ = Describe("ScopeInstanceReconciler", func() {
 				si = &operatorsv1.ScopeInstance{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       "ScopeInstance",
-						APIVersion: "operators.io.operator-framework/v1",
+						APIVersion: "operators.io.operator-framework/v1alpha1",
 					},
 					ObjectMeta: metav1.ObjectMeta{
 						Name: "scopeinstance-notemplate",
 					},
 				}
+				fmt.Println("creating si: scopeinstance-notemplate")
 				err := k8sClient.Create(ctx, si)
 				Expect(err).NotTo(HaveOccurred())
 			})
 			AfterEach(func() {
 				// delete the scope instance
+				fmt.Println("deleting si: scopeinstance-notemplate")
 				Expect(k8sClient.Delete(ctx, si)).NotTo(HaveOccurred())
 			})
 
@@ -242,6 +244,18 @@ var _ = Describe("ScopeInstanceReconciler", func() {
 				// setup:
 				// create bindings with instance uids, and they should get
 				// deleted.
+				Eventually(func() error {
+					scopeInstance := &operatorsv1.ScopeInstance{}
+					if err := k8sClient.Get(ctx, types.NamespacedName{
+						Name: "scopeinstance-notemplate"}, scopeInstance); err != nil {
+						fmt.Println("XXX error getting scope instance")
+						return err
+					}
+					for _, cond := range scopeInstance.Status.Conditions {
+						fmt.Printf("Status %s\nReason: %s\n", cond.Status, cond.Reason)
+					}
+					return nil
+				}, timeout, interval).Should(BeNil())
 			})
 		})
 		When("it references a scopetemplate with no namespace", func() {
