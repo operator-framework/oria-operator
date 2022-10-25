@@ -373,7 +373,7 @@ var _ = Describe("ScopeInstanceReconciler", func() {
 
 						verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
 
-						roleBindingList = listRoleBinding(namespace.GetName(), 0, labels)
+						_ = listRoleBinding(namespace.GetName(), 0, labels)
 
 					})
 
