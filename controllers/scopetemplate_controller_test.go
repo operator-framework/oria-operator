@@ -23,9 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -39,13 +37,10 @@ const (
 var _ = Describe("ScopeTemplate", func() {
 	var (
 		namespace     *corev1.Namespace
-		namespace2    *corev1.Namespace
 		scopeTemplate *operatorsv1.ScopeTemplate
 		scopeInstance *operatorsv1.ScopeInstance
 		// Use this to track the test iteration
 		iteration int
-
-		reasonSuccessMsgTemplate = "ScopeTemplate %q successfully reconciled"
 	)
 
 	BeforeEach(func() {
@@ -110,19 +105,15 @@ var _ = Describe("ScopeTemplate", func() {
 		})
 
 		It("should not create a clusterRole", func() {
+			// scope instances are what trigger the creation of the clusterRole
 			labels := map[string]string{scopeTemplateUIDKey: string(scopeTemplate.GetUID()),
 				clusterRoleGenerateKey: "test"}
 
 			clusterRoleList := listClusterRole(0, labels)
 			Expect(clusterRoleList.Items).Should(BeNil())
-			verifyScopeTemplateStatus(scopeTemplate,
-				operatorsv1.TypeTemplated,
-				operatorsv1.ReasonTemplatingSuccessful,
-				metav1.ConditionTrue,
-				fmt.Sprintf(reasonSuccessMsgTemplate, scopeTemplate.Name))
 		})
 
-		When("a scopeInstance is created that references the scopeTemplate with a single namespace", func() {
+		When("a scopeInstance is created that references the scopeTemplate", func() {
 			BeforeEach(func() {
 				scopeInstance = &operatorsv1.ScopeInstance{
 					TypeMeta: metav1.TypeMeta{
@@ -170,240 +161,10 @@ var _ = Describe("ScopeTemplate", func() {
 						Resources: []string{"secrets"},
 					},
 				}))
-				verifyScopeTemplateStatus(scopeTemplate,
-					operatorsv1.TypeTemplated,
-					operatorsv1.ReasonTemplatingSuccessful,
-					metav1.ConditionTrue,
-					fmt.Sprintf(reasonSuccessMsgTemplate, scopeTemplate.Name))
-			})
-
-			It("should create the expected RoleBinding within the test namespace", func() {
-				labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-					clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
-
-				roleBindingList := listRoleBinding(namespace.GetName(), 1, labels)
-
-				existingRB := &roleBindingList.Items[0]
-
-				verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
-				verifyScopeTemplateStatus(scopeTemplate,
-					operatorsv1.TypeTemplated,
-					operatorsv1.ReasonTemplatingSuccessful,
-					metav1.ConditionTrue,
-					fmt.Sprintf(reasonSuccessMsgTemplate, scopeTemplate.Name))
-			})
-
-			When("a scopeInstance is updated to include another namespace", func() {
-				BeforeEach(func() {
-					namespace2 = &corev1.Namespace{
-						ObjectMeta: metav1.ObjectMeta{
-							GenerateName: "test-",
-						},
-					}
-					Expect(k8sClient.Create(ctx, namespace2)).NotTo(HaveOccurred())
-				})
-
-				AfterEach(func() {
-					Expect(k8sClient.Delete(ctx, namespace2)).NotTo(HaveOccurred())
-				})
-
-				It("Should create new roleBindings in the expected namespaces", func() {
-					Eventually(func() error {
-						scopeInstance := &operatorsv1.ScopeInstance{}
-						if err := k8sClient.Get(ctx, types.NamespacedName{Name: scopeInstanceName}, scopeInstance); err != nil {
-							return err
-						}
-						scopeInstance.Spec.Namespaces = []string{namespace.GetName(), namespace2.GetName()}
-						if err := k8sClient.Update(ctx, scopeInstance); err != nil {
-							return err
-						}
-						return nil
-					}, timeout, interval).Should(BeNil())
-
-					labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-						clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
-
-					roleBindingList := listRoleBinding(namespace2.GetName(), 1, labels)
-
-					existingRB := &roleBindingList.Items[0]
-
-					verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
-
-					roleBindingList = listRoleBinding(namespace.GetName(), 1, labels)
-
-					existingRB = &roleBindingList.Items[0]
-					verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
-					verifyScopeTemplateStatus(scopeTemplate,
-						operatorsv1.TypeTemplated,
-						operatorsv1.ReasonTemplatingSuccessful,
-						metav1.ConditionTrue,
-						fmt.Sprintf(reasonSuccessMsgTemplate, scopeTemplate.Name))
-				})
-
-				When("a scopeInstance is updated to remove one of the namespace", func() {
-					It("Should remove respective roleBindings in the expected namespaces", func() {
-						Eventually(func() error {
-							scopeInstance := &operatorsv1.ScopeInstance{}
-							if err := k8sClient.Get(ctx, types.NamespacedName{Name: scopeInstanceName}, scopeInstance); err != nil {
-								return err
-							}
-							scopeInstance.Spec.Namespaces = []string{namespace2.GetName()}
-							if err := k8sClient.Update(ctx, scopeInstance); err != nil {
-								return err
-							}
-							return nil
-						}, timeout, interval).Should(BeNil())
-
-						labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-							clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
-
-						roleBindingList := listRoleBinding(namespace2.GetName(), 1, labels)
-
-						existingRB := &roleBindingList.Items[0]
-
-						verifyRoleBindings(existingRB, scopeInstance, scopeTemplate)
-
-						roleBindingList = listRoleBinding(namespace.GetName(), 0, labels)
-						Expect(len(roleBindingList.Items)).To(Equal(0))
-					})
-
-					When("a scopeInstance is updated to remove all namespaces", func() {
-						It("Should create new clusterRoleBindings in the expected namespaces", func() {
-							Eventually(func() error {
-								scopeInstance := &operatorsv1.ScopeInstance{}
-								if err := k8sClient.Get(ctx, types.NamespacedName{Name: scopeInstanceName}, scopeInstance); err != nil {
-									return err
-								}
-								scopeInstance.Spec.Namespaces = []string{}
-								if err := k8sClient.Update(ctx, scopeInstance); err != nil {
-									return err
-								}
-								return nil
-							}, timeout, interval).Should(BeNil())
-
-							clusterRoleBindingList := &rbacv1.ClusterRoleBindingList{}
-							Eventually(func() error {
-								err := k8sClient.List(ctx, clusterRoleBindingList,
-									client.MatchingLabels{
-										scopeInstanceUIDKey:           string(scopeInstance.GetUID()),
-										clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName,
-									})
-								if err != nil {
-									return err
-								}
-
-								if len(clusterRoleBindingList.Items) != 1 {
-									return fmt.Errorf("Expected 1 roleBinding, found %d", len(clusterRoleBindingList.Items))
-								}
-
-								return nil
-							}, timeout, interval).Should(BeNil())
-
-							existingCRB := &clusterRoleBindingList.Items[0]
-
-							Expect(len(existingCRB.OwnerReferences)).To(Equal(1))
-							Expect(existingCRB.OwnerReferences).Should(ContainElement(metav1.OwnerReference{
-								APIVersion:         "operators.io.operator-framework/v1alpha1",
-								Kind:               "ScopeInstance",
-								Name:               scopeInstance.GetObjectMeta().GetName(),
-								UID:                scopeInstance.GetObjectMeta().GetUID(),
-								Controller:         pointer.Bool(true),
-								BlockOwnerDeletion: pointer.Bool(true),
-							}))
-
-							Expect(len(existingCRB.Subjects)).To(Equal(1))
-							Expect(existingCRB.Subjects).Should(ContainElement(rbacv1.Subject{
-								Kind:     "Group",
-								Name:     "manager",
-								APIGroup: "rbac.authorization.k8s.io",
-							}))
-							Expect(existingCRB.RoleRef).To(Equal(rbacv1.RoleRef{
-								Kind:     "ClusterRole",
-								Name:     scopeTemplate.Spec.ClusterRoles[0].GenerateName,
-								APIGroup: "rbac.authorization.k8s.io",
-							}))
-
-							labels := map[string]string{scopeInstanceUIDKey: string(scopeInstance.GetUID()),
-								clusterRoleBindingGenerateKey: scopeTemplate.Spec.ClusterRoles[0].GenerateName}
-
-							roleBindingList := listRoleBinding(namespace.GetName(), 0, labels)
-							Expect(len(roleBindingList.Items)).To(Equal(0))
-
-							roleBindingList = listRoleBinding(namespace2.GetName(), 0, labels)
-							Expect(len(roleBindingList.Items)).To(Equal(0))
-							verifyScopeTemplateStatus(scopeTemplate,
-								operatorsv1.TypeTemplated,
-								operatorsv1.ReasonTemplatingSuccessful,
-								metav1.ConditionTrue,
-								fmt.Sprintf(reasonSuccessMsgTemplate, scopeTemplate.Name))
-						})
-					})
-				})
 			})
 		})
 	})
 })
-
-func verifyRoleBindings(existingRB *rbacv1.RoleBinding, si *operatorsv1.ScopeInstance, st *operatorsv1.ScopeTemplate) {
-	// verify cluster role bindings with ownerference, subjects, and role reference.
-	Expect(len(existingRB.OwnerReferences)).To(Equal(1))
-	Expect(existingRB.OwnerReferences).Should(ContainElement(metav1.OwnerReference{
-		APIVersion:         "operators.io.operator-framework/v1alpha1",
-		Kind:               "ScopeInstance",
-		Name:               si.GetObjectMeta().GetName(),
-		UID:                si.GetObjectMeta().GetUID(),
-		Controller:         pointer.Bool(true),
-		BlockOwnerDeletion: pointer.Bool(true),
-	}))
-
-	Expect(len(existingRB.Subjects)).To(Equal(1))
-	Expect(existingRB.Subjects).Should(ContainElement(rbacv1.Subject{
-		Kind:     "Group",
-		Name:     "manager",
-		APIGroup: "rbac.authorization.k8s.io",
-	}))
-	Expect(existingRB.RoleRef).To(Equal(rbacv1.RoleRef{
-		Kind:     "ClusterRole",
-		Name:     st.Spec.ClusterRoles[0].GenerateName,
-		APIGroup: "rbac.authorization.k8s.io",
-	}))
-}
-
-func verifyScopeTemplateStatus(st *operatorsv1.ScopeTemplate, conditionType string, reason string, status metav1.ConditionStatus, message string) {
-	tempSt := &operatorsv1.ScopeTemplate{}
-	Eventually(func() error {
-		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(st), tempSt)).NotTo(HaveOccurred())
-		if len(tempSt.Status.Conditions) == 0 {
-			return fmt.Errorf("status.conditions len not > 0")
-		}
-		return nil
-	}).Should(Succeed())
-
-	cond := meta.FindStatusCondition(tempSt.Status.Conditions, conditionType)
-	Expect(cond).ShouldNot(BeNil())
-	Expect(cond.Reason).Should(Equal(reason))
-	Expect(cond.Status).Should(Equal(status))
-	Expect(cond.Message).Should(Equal(message))
-}
-
-func listRoleBinding(namespace string, numberOfExpectedRoleBindings int, labels map[string]string) *rbacv1.RoleBindingList {
-	roleBindingList := &rbacv1.RoleBindingList{}
-	Eventually(func() error {
-		if err := k8sClient.List(ctx, roleBindingList, &client.ListOptions{
-			Namespace: namespace,
-		}, client.MatchingLabels(labels)); err != nil {
-			return err
-		}
-
-		if len(roleBindingList.Items) != numberOfExpectedRoleBindings {
-			return fmt.Errorf("Expected 1 roleBinding, found %d", len(roleBindingList.Items))
-		}
-
-		return nil
-	}, timeout, interval).Should(BeNil())
-
-	return roleBindingList
-}
 
 func listClusterRole(numberOfExpectedRoleBindings int, labels map[string]string) *rbacv1.ClusterRoleList {
 	clusterRoleList := &rbacv1.ClusterRoleList{}
@@ -415,7 +176,7 @@ func listClusterRole(numberOfExpectedRoleBindings int, labels map[string]string)
 		}
 
 		if len(clusterRoleList.Items) != numberOfExpectedRoleBindings {
-			return fmt.Errorf("Expected 0 clusterRoles, found %d", len(clusterRoleList.Items))
+			return fmt.Errorf("Expected %d clusterRoles, found %d", numberOfExpectedRoleBindings, len(clusterRoleList.Items))
 		}
 
 		return nil
